@@ -1,0 +1,88 @@
+@import '@fontsource/barlow/400.css';
+@import '@fontsource/barlow/500.css';
+@import '@fontsource/barlow/700.css';
+@import '@fontsource/orbitron/500.css';
+@import '@fontsource/orbitron/700.css';
+
+:root {
+  --bg: #0b0b0d;
+  --bg-panel: #171719;
+  --text-strong: #fff3f3;
+  --text-soft: rgba(255, 226, 226, 0.72);
+  --text-muted: rgba(255, 215, 215, 0.52);
+  --accent: #ff4e4e;
+  --accent-soft: #ff8585;
+  --success: #4edb8b;
+  --font-body: 'Barlow', 'Segoe UI', sans-serif;
+  --font-display: 'Orbitron', 'Barlow', sans-serif;
+
+  font-family: var(--font-body);
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-soft);
+  background:
+    radial-gradient(circle at top, rgba(255, 70, 70, 0.15), transparent 26%),
+    linear-gradient(180deg, #161214 0%, #070708 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #09090a;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button {
+  appearance: none;
+}
+
+button,
+select {
+  outline: none;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 125, 125, 0.5);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  color: var(--text-strong);
+}
+
+h1 {
+  font-size: clamp(2.6rem, 5vw, 4.4rem);
+  line-height: 0.98;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+
+#root {
+  min-height: 100vh;
+}
