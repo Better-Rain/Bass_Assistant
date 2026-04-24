@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AudioLines,
+  BarChart3,
+  Bookmark,
   CircleAlert,
   Gauge,
   Guitar,
   Pause,
   Play,
+  Plus,
   Radio,
   RefreshCw,
   Repeat,
@@ -16,6 +19,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Star,
+  Timer,
+  Trash2,
   Volume2,
 } from 'lucide-react'
 
@@ -40,6 +45,23 @@ import {
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
+
+type AppSection = 'overview' | 'tuner' | 'library' | 'practice' | 'input'
+
+type PracticeMarker = {
+  id: string
+  songId: string
+  time: number
+  label: string
+}
+
+const sectionItems: { id: AppSection; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'tuner', label: 'Tuner' },
+  { id: 'library', label: 'Library' },
+  { id: 'practice', label: 'Practice' },
+  { id: 'input', label: 'Input' },
+]
 
 const stopOscillator = (oscillator: OscillatorNode | null | undefined) => {
   if (!oscillator) {
@@ -78,6 +100,24 @@ const getStoredPlaybackPositions = () => {
   }
 }
 
+const getStoredMarkers = () => {
+  try {
+    const value = window.localStorage.getItem('bass-record.markers')
+    return value ? (JSON.parse(value) as PracticeMarker[]) : []
+  } catch {
+    return []
+  }
+}
+
+const getStoredNotes = () => {
+  try {
+    const value = window.localStorage.getItem('bass-record.practiceNotes')
+    return value ? (JSON.parse(value) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
 const formatTime = (seconds: number) => {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return '0:00'
@@ -102,6 +142,7 @@ function App() {
   const [selectedDeviceId, setSelectedDeviceId] = useState(() =>
     getStoredString('bass-record.device', ''),
   )
+  const [activeSection, setActiveSection] = useState<AppSection>('overview')
   const [selectedTuningId, setSelectedTuningId] = useState(() =>
     getStoredString('bass-record.tuning', DEFAULT_TUNING),
   )
@@ -121,6 +162,13 @@ function App() {
     getStoredNumber('bass-record.playbackRate', 1),
   )
   const [loopEnabled, setLoopEnabled] = useState(false)
+  const [abLoopEnabled, setAbLoopEnabled] = useState(false)
+  const [loopStart, setLoopStart] = useState<number | null>(null)
+  const [loopEnd, setLoopEnd] = useState<number | null>(null)
+  const [metronomeEnabled, setMetronomeEnabled] = useState(false)
+  const [tempo, setTempo] = useState(() => getStoredNumber('bass-record.tempo', 90))
+  const [practiceMarkers, setPracticeMarkers] = useState<PracticeMarker[]>(getStoredMarkers)
+  const [practiceNotes, setPracticeNotes] = useState<Record<string, string>>(getStoredNotes)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -130,6 +178,8 @@ function App() {
   const playbackPositionsRef = useRef<Record<string, number>>(getStoredPlaybackPositions())
   const lastSavedSecondRef = useRef(-1)
   const referenceContextRef = useRef<AudioContext | null>(null)
+  const metronomeContextRef = useRef<AudioContext | null>(null)
+  const metronomeTimerRef = useRef<number | null>(null)
   const referenceNodesRef = useRef<{
     primary: OscillatorNode
     octave: OscillatorNode
@@ -224,6 +274,37 @@ function App() {
     return tuningCents > 0 ? 'Pitch is sharp. Loosen the tuner slightly.' : 'Pitch is flat. Tighten the tuner slowly.'
   }, [perfectlyTuned, signalPresent, snapshot.clarity, snapshot.level, status, targetString, tuningCents])
 
+  const sectionTitle = useMemo(() => {
+    switch (activeSection) {
+      case 'overview':
+        return 'Command Center'
+      case 'tuner':
+        return 'Live Tuner'
+      case 'library':
+        return 'Practice Library'
+      case 'practice':
+        return 'Practice Lab'
+      case 'input':
+        return 'Input Rig'
+    }
+  }, [activeSection])
+
+  const activeSongMarkers = useMemo(
+    () => practiceMarkers.filter((marker) => marker.songId === activeSong?.id),
+    [activeSong?.id, practiceMarkers],
+  )
+
+  const activePracticeNote = activeSong ? (practiceNotes[activeSong.id] ?? '') : ''
+
+  const analysisBars = useMemo(
+    () => Array.from({ length: 28 }, (_, index) => {
+      const historyBias = history[index % Math.max(history.length, 1)] ? 12 : 0
+      const wave = Math.sin(index * 0.74 + currentTime * 0.22) * 18
+      return Math.round(clamp(28 + signalLevel * 0.34 + clarityPercent * 0.16 + historyBias + wave, 12, 92))
+    }),
+    [clarityPercent, currentTime, history, signalLevel],
+  )
+
   const deviceHint = useMemo(() => {
     if (error) {
       return error
@@ -281,6 +362,18 @@ function App() {
   }, [playbackRate])
 
   useEffect(() => {
+    window.localStorage.setItem('bass-record.tempo', String(tempo))
+  }, [tempo])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.markers', JSON.stringify(practiceMarkers))
+  }, [practiceMarkers])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.practiceNotes', JSON.stringify(practiceNotes))
+  }, [practiceNotes])
+
+  useEffect(() => {
     const audio = audioRef.current
 
     if (!audio) {
@@ -308,6 +401,16 @@ function App() {
     }
 
     const onTimeUpdate = () => {
+      if (
+        abLoopEnabled &&
+        loopStart !== null &&
+        loopEnd !== null &&
+        loopEnd > loopStart + 0.5 &&
+        audio.currentTime >= loopEnd
+      ) {
+        audio.currentTime = loopStart
+      }
+
       setCurrentTime(audio.currentTime)
 
       if (!activeSong) {
@@ -386,7 +489,7 @@ function App() {
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [activeSong, filteredSongs, loopEnabled])
+  }, [abLoopEnabled, activeSong, filteredSongs, loopEnabled, loopEnd, loopStart])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -475,10 +578,50 @@ function App() {
   }, [activeReferenceNote, concertA, referenceEnabled, tuning])
 
   useEffect(() => {
+    if (!metronomeEnabled) {
+      if (metronomeTimerRef.current !== null) {
+        window.clearInterval(metronomeTimerRef.current)
+        metronomeTimerRef.current = null
+      }
+
+      return
+    }
+
+    const audioContext =
+      metronomeContextRef.current ?? new AudioContext({ latencyHint: 'interactive' })
+    metronomeContextRef.current = audioContext
+
+    const playClick = () => {
+      const oscillator = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+      oscillator.type = 'square'
+      oscillator.frequency.value = 1120
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.004)
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.055)
+      oscillator.connect(gain)
+      gain.connect(audioContext.destination)
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 0.06)
+    }
+
+    playClick()
+    metronomeTimerRef.current = window.setInterval(playClick, 60000 / tempo)
+
+    return () => {
+      if (metronomeTimerRef.current !== null) {
+        window.clearInterval(metronomeTimerRef.current)
+        metronomeTimerRef.current = null
+      }
+    }
+  }, [metronomeEnabled, tempo])
+
+  useEffect(() => {
     return () => {
       stopOscillator(referenceNodesRef.current?.primary)
       stopOscillator(referenceNodesRef.current?.octave)
       referenceContextRef.current?.close().catch(() => undefined)
+      metronomeContextRef.current?.close().catch(() => undefined)
     }
   }, [])
 
@@ -529,6 +672,74 @@ function App() {
     setPreferredVariant(variant)
   }
 
+  const setLoopPoint = (point: 'start' | 'end') => {
+    const nextTime = audioRef.current?.currentTime ?? currentTime
+
+    if (point === 'start') {
+      setLoopStart(nextTime)
+
+      if (loopEnd !== null && loopEnd <= nextTime) {
+        setLoopEnd(null)
+      }
+
+      return
+    }
+
+    setLoopEnd(nextTime)
+
+    if (loopStart !== null && nextTime <= loopStart) {
+      setLoopStart(null)
+    }
+  }
+
+  const addMarker = () => {
+    if (!activeSong) {
+      return
+    }
+
+    const markerTime = audioRef.current?.currentTime ?? currentTime
+    setPracticeMarkers((current) => [
+      ...current,
+      {
+        id: `${activeSong.id}-${Date.now()}`,
+        songId: activeSong.id,
+        time: markerTime,
+        label: `Marker ${current.filter((marker) => marker.songId === activeSong.id).length + 1}`,
+      },
+    ])
+  }
+
+  const removeMarker = (markerId: string) => {
+    setPracticeMarkers((current) => current.filter((marker) => marker.id !== markerId))
+  }
+
+  const jumpToTime = (time: number) => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    audio.currentTime = time
+    setCurrentTime(time)
+  }
+
+  const updatePracticeNote = (note: string) => {
+    if (!activeSong) {
+      return
+    }
+
+    setPracticeNotes((current) => ({ ...current, [activeSong.id]: note }))
+  }
+
+  const showOverview = activeSection === 'overview'
+  const showTuner = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'practice'
+  const showQueue = activeSection === 'overview' || activeSection === 'library'
+  const showRig = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
+  const showReference = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
+  const showLibraryPanel = activeSection === 'overview' || activeSection === 'library'
+  const showPracticeLab = activeSection === 'practice'
+
   return (
     <div className="app-shell app-window">
       <div className="noise-overlay" />
@@ -544,11 +755,16 @@ function App() {
         </div>
 
         <nav className="sidebar-nav">
-          <button type="button" className="sidebar-link sidebar-link-active">Overview</button>
-          <button type="button" className="sidebar-link">Tuner</button>
-          <button type="button" className="sidebar-link">Library</button>
-          <button type="button" className="sidebar-link">Practice</button>
-          <button type="button" className="sidebar-link">Input</button>
+          {sectionItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`sidebar-link ${activeSection === item.id ? 'sidebar-link-active' : ''}`}
+              onClick={() => setActiveSection(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="sidebar-section">
@@ -565,6 +781,11 @@ function App() {
 
       <section className="app-main">
         <header className="topbar">
+          <div className="topbar-title">
+            <span>Workspace</span>
+            <strong>{sectionTitle}</strong>
+          </div>
+
           <label className="topbar-search">
             <Search size={18} />
             <input
@@ -587,6 +808,7 @@ function App() {
         </header>
 
         <div className="content-scroll">
+          {showOverview && (
           <section className="hero-grid">
             <article className="hero-card hero-card-primary">
               <p className="panel-label">Live tuning</p>
@@ -613,7 +835,9 @@ function App() {
               <small>{deviceHint}</small>
             </article>
           </section>
+          )}
 
+          {showQueue && (
           <section className="content-section">
             <div className="section-heading">
               <div>
@@ -653,8 +877,126 @@ function App() {
               ))}
             </div>
           </section>
+          )}
 
-          <div className="workspace-grid">
+          <div className={`workspace-grid workspace-grid-${activeSection}`}>
+            {showPracticeLab && (
+              <section className="panel practice-lab-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="panel-label">Practice Lab</p>
+                    <h2>A-B Loop, Click & Notes</h2>
+                  </div>
+                  <div className="panel-meta">
+                    <span>{activeSong?.title ?? 'No track selected'}</span>
+                    <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+                  </div>
+                </div>
+
+                <div className="practice-grid">
+                  <article className="practice-card analysis-card">
+                    <div className="practice-card-head">
+                      <BarChart3 size={18} />
+                      <strong>Signal / Groove View</strong>
+                    </div>
+                    <div className="visualizer-bars" aria-hidden="true">
+                      {analysisBars.map((height, index) => (
+                        <i key={index} style={{ height: `${height}%` }} />
+                      ))}
+                    </div>
+                    <p>Use tuner clarity and playback position as a lightweight practice visualizer.</p>
+                  </article>
+
+                  <article className="practice-card">
+                    <div className="practice-card-head">
+                      <Repeat size={18} />
+                      <strong>A-B Loop</strong>
+                    </div>
+                    <div className="ab-loop-grid">
+                      <button type="button" className="toggle-chip" onClick={() => setLoopPoint('start')}>
+                        Set A {loopStart !== null ? formatTime(loopStart) : '--'}
+                      </button>
+                      <button type="button" className="toggle-chip" onClick={() => setLoopPoint('end')}>
+                        Set B {loopEnd !== null ? formatTime(loopEnd) : '--'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-chip ${abLoopEnabled ? 'toggle-chip-active' : ''}`}
+                        onClick={() => setAbLoopEnabled((current) => !current)}
+                        disabled={loopStart === null || loopEnd === null || loopEnd <= loopStart}
+                      >
+                        {abLoopEnabled ? 'A-B on' : 'A-B off'}
+                      </button>
+                    </div>
+                    <small>Loop a hard phrase without changing single-track repeat.</small>
+                  </article>
+
+                  <article className="practice-card">
+                    <div className="practice-card-head">
+                      <Timer size={18} />
+                      <strong>Metronome</strong>
+                    </div>
+                    <div className="tempo-row">
+                      <input
+                        type="range"
+                        min="40"
+                        max="220"
+                        value={tempo}
+                        onChange={(event) => setTempo(Number(event.target.value))}
+                      />
+                      <strong>{tempo} BPM</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className={`toggle-chip ${metronomeEnabled ? 'toggle-chip-active' : ''}`}
+                      onClick={() => setMetronomeEnabled((current) => !current)}
+                    >
+                      {metronomeEnabled ? 'Stop click' : 'Start click'}
+                    </button>
+                  </article>
+
+                  <article className="practice-card marker-card">
+                    <div className="practice-card-head">
+                      <Bookmark size={18} />
+                      <strong>Song Markers</strong>
+                    </div>
+                    <button type="button" className="icon-button" onClick={addMarker} disabled={!activeSong}>
+                      <Plus size={16} />
+                      <span>Add marker</span>
+                    </button>
+                    <div className="marker-list">
+                      {activeSongMarkers.length > 0 ? (
+                        activeSongMarkers.map((marker) => (
+                          <div key={marker.id} className="marker-row">
+                            <button type="button" onClick={() => jumpToTime(marker.time)}>
+                              <strong>{marker.label}</strong>
+                              <span>{formatTime(marker.time)}</span>
+                            </button>
+                            <button type="button" className="ghost-button" onClick={() => removeMarker(marker.id)}>
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <small>No markers yet. Drop one before a difficult fill or shift.</small>
+                      )}
+                    </div>
+                  </article>
+                </div>
+
+                <label className="notes-field">
+                  <span>Practice notes for this track</span>
+                  <textarea
+                    value={activePracticeNote}
+                    onChange={(event) => updatePracticeNote(event.target.value)}
+                    placeholder="Write fingering ideas, tempo goals, tone notes, or bars to revisit."
+                    disabled={!activeSong}
+                  />
+                </label>
+              </section>
+            )}
+
+            {showTuner && (
             <section className="panel tuner-panel">
               <div className="section-heading">
                 <div>
@@ -758,8 +1100,10 @@ function App() {
                 </article>
               </div>
             </section>
+            )}
 
             <aside className="workspace-side">
+              {showRig && (
               <section className="panel">
                 <div className="section-heading">
                   <div>
@@ -821,7 +1165,9 @@ function App() {
                   <p>{deviceHint}</p>
                 </div>
               </section>
+              )}
 
+              {showReference && (
               <section className="panel">
                 <div className="section-heading">
                   <div>
@@ -869,7 +1215,9 @@ function App() {
                   </div>
                 </div>
               </section>
+              )}
 
+              {showLibraryPanel && (
               <section className="panel library-panel app-library-panel">
                 <div className="section-heading">
                   <div>
@@ -948,6 +1296,7 @@ function App() {
                   )}
                 </div>
               </section>
+              )}
             </aside>
           </div>
         </div>
@@ -958,7 +1307,7 @@ function App() {
             <div>
               <strong>{activeSong?.title ?? 'No track selected'}</strong>
               <span>
-                {activeTrack ? `${activeTrack.label} · ${activeSong?.lessonName ?? ''}` : 'Select a practice track'}
+                {activeTrack ? `${activeTrack.label} - ${activeSong?.lessonName ?? ''}` : 'Select a practice track'}
               </span>
             </div>
           </div>

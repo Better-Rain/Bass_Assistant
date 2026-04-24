@@ -13,7 +13,10 @@ Redline Bass Tuner is a bass practice tool focused on direct-input workflow. The
 - Backing / full / workout track switching
 - Search, favorites, playback speed, and single-track loop
 - Resume playback from the last saved position for each song
-- App-style layout with sidebar, top search bar, main workspace, and bottom transport bar
+- Desktop-player layout with sidebar navigation, top search, section workspaces, and bottom transport bar
+- Real section switching for Overview, Tuner, Library, Practice, and Input
+- Practice tools: A-B loop, metronome, lightweight visualizer, song markers, and per-track notes
+- Electron desktop shell for running the same Vite app as a local desktop window
 
 ## Local Library
 
@@ -32,6 +35,20 @@ npm run dev
 
 The default local address is usually `http://localhost:5173`.
 
+## Desktop App
+
+Electron is used as the desktop wrapper because this project is already a Vite + React app and does not need a Rust toolchain.
+
+```bash
+npm run dev:desktop
+```
+
+For a production smoke check:
+
+```bash
+npm run build:desktop
+```
+
 ## Validate
 
 ```bash
@@ -46,3 +63,5 @@ npm run build
 - Disable OS-level auto gain, noise suppression, and echo cancellation when possible.
 - For tuning, pluck a single open string and let the detector lock for 1 to 2 seconds.
 - During practice, start with the backing-track version and switch to the full version for comparison when needed.
+- In Practice, set A and B while playback is moving, then enable A-B to repeat only that phrase.
+- Markers and notes are saved in browser or Electron local storage for each track.
