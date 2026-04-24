@@ -6,10 +6,17 @@ import {
   Gauge,
   Guitar,
   Mic,
+  Pause,
+  Play,
   Radio,
   RefreshCw,
+  Repeat,
+  Search,
+  SkipBack,
+  SkipForward,
   SlidersHorizontal,
   Sparkles,
+  Star,
   Volume2,
 } from 'lucide-react'
 
@@ -23,6 +30,14 @@ import {
   tuningPresets,
   type TuningPreset,
 } from './lib/music'
+import {
+  defaultVariantOrder,
+  lessonOptions,
+  librarySongs,
+  variantOptions,
+  type LibrarySong,
+  type TrackVariant,
+} from './lib/tracks'
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
@@ -46,6 +61,44 @@ const getStoredNumber = (key: string, fallback: number) => {
 
 const getStoredString = (key: string, fallback: string) => window.localStorage.getItem(key) ?? fallback
 
+const getStoredStringArray = (key: string) => {
+  try {
+    const value = window.localStorage.getItem(key)
+    return value ? (JSON.parse(value) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+const getStoredPlaybackPositions = () => {
+  try {
+    const value = window.localStorage.getItem('bass-record.playbackPositions')
+    return value ? (JSON.parse(value) as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const formatTime = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return '0:00'
+  }
+
+  const rounded = Math.floor(seconds)
+  const minutes = Math.floor(rounded / 60)
+  const remainingSeconds = rounded % 60
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+const pickTrackVariant = (song: LibrarySong, preferredVariant: TrackVariant) => {
+  const variants = song.variants
+  return (
+    variants[preferredVariant] ??
+    defaultVariantOrder.map((variant) => variants[variant]).find(Boolean) ??
+    null
+  )
+}
+
 function App() {
   const [selectedDeviceId, setSelectedDeviceId] = useState(() =>
     getStoredString('bass-record.device', ''),
@@ -56,7 +109,27 @@ function App() {
   const [concertA, setConcertA] = useState(() => getStoredNumber('bass-record.a4', DEFAULT_A4))
   const [referenceStringNote, setReferenceStringNote] = useState('E1')
   const [referenceEnabled, setReferenceEnabled] = useState(false)
+  const [selectedSongId, setSelectedSongId] = useState<string | null>(librarySongs[0]?.id ?? null)
+  const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedLessonId, setSelectedLessonId] = useState('all')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const [onlyBacking, setOnlyBacking] = useState(false)
+  const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>(() =>
+    getStoredStringArray('bass-record.favorites'),
+  )
+  const [playbackRate, setPlaybackRate] = useState(() =>
+    getStoredNumber('bass-record.playbackRate', 1),
+  )
+  const [loopEnabled, setLoopEnabled] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
 
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const autoPlayNextTrackRef = useRef(false)
+  const playbackPositionsRef = useRef<Record<string, number>>(getStoredPlaybackPositions())
+  const lastSavedSecondRef = useRef(-1)
   const referenceContextRef = useRef<AudioContext | null>(null)
   const referenceNodesRef = useRef<{
     primary: OscillatorNode
@@ -79,6 +152,7 @@ function App() {
     concertA,
   })
 
+  const favoriteSongIdSet = useMemo(() => new Set(favoriteSongIds), [favoriteSongIds])
   const visibleDeviceId =
     devices.some((device) => device.deviceId === selectedDeviceId) ? selectedDeviceId : ''
   const noteParts = formatNoteName(snapshot.note ?? tuning.strings[0].note)
@@ -89,10 +163,43 @@ function App() {
   const signalLevel = Math.round(clamp(snapshot.level * 500, 0, 100))
   const clarityPercent = Math.round(snapshot.clarity * 100)
   const targetString = snapshot.stringMatch?.note ?? tuning.strings[0].note
-  const targetFrequency = snapshot.stringMatch?.targetFrequency ?? midiToFrequency(tuning.strings[0].midi, concertA)
+  const targetFrequency =
+    snapshot.stringMatch?.targetFrequency ?? midiToFrequency(tuning.strings[0].midi, concertA)
   const namedDevices = devices.filter((device) => !device.isAlias)
   const aliasOnly = devices.length > 0 && namedDevices.length === 0
   const perfectlyTuned = signalPresent && Math.abs(tuningCents) <= 2 && snapshot.clarity >= 0.95
+
+  const filteredSongs = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+
+    return librarySongs.filter((song) => {
+      const matchesLesson = selectedLessonId === 'all' || song.lessonId === selectedLessonId
+      const matchesFavorites = !favoritesOnly || favoriteSongIdSet.has(song.id)
+      const matchesBacking = !onlyBacking || Boolean(song.variants.backing)
+      const searchableText = `${song.title} ${song.lessonName} ${song.level ?? ''} ${song.tags.join(' ')}`
+      const matchesSearch = !normalizedQuery || searchableText.toLowerCase().includes(normalizedQuery)
+
+      return matchesLesson && matchesFavorites && matchesBacking && matchesSearch
+    })
+  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedLessonId])
+
+  const activeSong = useMemo(() => {
+    if (filteredSongs.length === 0) {
+      return null
+    }
+
+    return filteredSongs.find((song) => song.id === selectedSongId) ?? filteredSongs[0]
+  }, [filteredSongs, selectedSongId])
+
+  const activeTrack = useMemo(
+    () => (activeSong ? pickTrackVariant(activeSong, preferredVariant) : null),
+    [activeSong, preferredVariant],
+  )
+
+  const backingReadyCount = useMemo(
+    () => librarySongs.filter((song) => song.availableVariants.includes('backing')).length,
+    [],
+  )
 
   const currentTip = useMemo(() => {
     if (status === 'error') {
@@ -145,6 +252,143 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('bass-record.a4', String(concertA))
   }, [concertA])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.favorites', JSON.stringify(favoriteSongIds))
+  }, [favoriteSongIds])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.playbackRate', String(playbackRate))
+  }, [playbackRate])
+
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    audio.loop = loopEnabled
+  }, [loopEnabled])
+
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    audio.playbackRate = playbackRate
+  }, [playbackRate])
+
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime)
+
+      if (!activeSong) {
+        return
+      }
+
+      const wholeSecond = Math.floor(audio.currentTime)
+
+      if (wholeSecond === lastSavedSecondRef.current) {
+        return
+      }
+
+      lastSavedSecondRef.current = wholeSecond
+      playbackPositionsRef.current[activeSong.id] = audio.currentTime
+      window.localStorage.setItem(
+        'bass-record.playbackPositions',
+        JSON.stringify(playbackPositionsRef.current),
+      )
+    }
+    const onLoadStart = () => {
+      lastSavedSecondRef.current = -1
+      setCurrentTime(0)
+      setDuration(0)
+    }
+    const onLoadedMetadata = () => {
+      if (activeSong) {
+        const resumeAt = playbackPositionsRef.current[activeSong.id] ?? 0
+        const safeResumeAt =
+          resumeAt > 0 && audio.duration > 1 ? Math.min(resumeAt, audio.duration - 0.5) : 0
+
+        if (safeResumeAt > 0) {
+          audio.currentTime = safeResumeAt
+        }
+      }
+
+      setDuration(audio.duration || 0)
+      setCurrentTime(audio.currentTime || 0)
+    }
+    const onPlay = () => setIsPlaying(true)
+    const onPause = () => setIsPlaying(false)
+    const onEnded = () => {
+      if (activeSong) {
+        playbackPositionsRef.current[activeSong.id] = 0
+        window.localStorage.setItem(
+          'bass-record.playbackPositions',
+          JSON.stringify(playbackPositionsRef.current),
+        )
+      }
+
+      if (loopEnabled || filteredSongs.length === 0 || !activeSong) {
+        setIsPlaying(false)
+        return
+      }
+
+      const currentIndex = filteredSongs.findIndex((song) => song.id === activeSong.id)
+      const nextSong = filteredSongs[(currentIndex + 1) % filteredSongs.length]
+      autoPlayNextTrackRef.current = true
+      setSelectedSongId(nextSong.id)
+    }
+
+    audio.addEventListener('loadstart', onLoadStart)
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('ended', onEnded)
+
+    return () => {
+      audio.removeEventListener('loadstart', onLoadStart)
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('ended', onEnded)
+    }
+  }, [activeSong, filteredSongs, loopEnabled])
+
+  useEffect(() => {
+    const audio = audioRef.current
+
+    if (!audio) {
+      return
+    }
+
+    if (!activeTrack) {
+      audio.pause()
+      audio.load()
+      return
+    }
+
+    audio.load()
+
+    if (autoPlayNextTrackRef.current || isPlaying) {
+      void audio.play().catch(() => {
+        setIsPlaying(false)
+      })
+    }
+
+    autoPlayNextTrackRef.current = false
+  }, [activeTrack, isPlaying])
 
   useEffect(() => {
     if (!referenceEnabled) {
@@ -216,9 +460,58 @@ function App() {
     }
   }, [])
 
+  const togglePlayback = async () => {
+    const audio = audioRef.current
+
+    if (!audio || !activeTrack) {
+      return
+    }
+
+    if (audio.paused) {
+      try {
+        await audio.play()
+      } catch {
+        setIsPlaying(false)
+      }
+      return
+    }
+
+    audio.pause()
+  }
+
+  const jumpSong = (direction: -1 | 1) => {
+    if (filteredSongs.length === 0 || !activeSong) {
+      return
+    }
+
+    const currentIndex = filteredSongs.findIndex((song) => song.id === activeSong.id)
+    const nextIndex = (currentIndex + direction + filteredSongs.length) % filteredSongs.length
+
+    autoPlayNextTrackRef.current = isPlaying
+    setSelectedSongId(filteredSongs[nextIndex].id)
+  }
+
+  const toggleFavorite = (songId: string) => {
+    setFavoriteSongIds((current) =>
+      current.includes(songId) ? current.filter((id) => id !== songId) : [...current, songId],
+    )
+  }
+
+  const handleSongSelect = (songId: string, autoplay = false) => {
+    autoPlayNextTrackRef.current = autoplay || isPlaying
+    setSelectedSongId(songId)
+  }
+
+  const handleVariantSelect = (variant: TrackVariant) => {
+    autoPlayNextTrackRef.current = isPlaying
+    setPreferredVariant(variant)
+  }
+
+  // RENDER
   return (
     <div className="app-shell">
       <div className="noise-overlay" />
+      <audio ref={audioRef} preload="metadata" src={activeTrack?.filePath} />
 
       <header className="hero-panel">
         <div className="hero-copy">
@@ -406,7 +699,7 @@ function App() {
                 <strong>{concertA} Hz</strong>
               </div>
               <small className="field-help">
-                这是音高体系的参考基准。标准值是 A4 = 440 Hz；如果你要跟随钢琴、旧乐队录音或其他非标准参考音，可以在这里微调。
+                这是音高体系的参考基准。标准值是 A4 = 440 Hz；如果你要跟随钢琴、旧录音或其他非标准参考音，可以在这里微调。
               </small>
             </label>
 
@@ -501,6 +794,249 @@ function App() {
           </section>
         </aside>
       </main>
+
+      <section className="panel library-panel">
+        <div className="panel-header">
+          <div>
+            <p className="panel-label">Practice library</p>
+            <h2>伴奏曲库</h2>
+          </div>
+          <div className="panel-meta">
+            <span>{librarySongs.length} 首乐曲</span>
+            <span>{backingReadyCount} 首可直接切伴奏</span>
+          </div>
+        </div>
+
+        <div className="library-toolbar">
+          <label className="search-box">
+            <Search size={18} />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索歌曲、课程、等级"
+            />
+          </label>
+
+          <div className="filter-group">
+            <button
+              type="button"
+              className={`filter-chip ${selectedLessonId === 'all' ? 'filter-chip-active' : ''}`}
+              onClick={() => setSelectedLessonId('all')}
+            >
+              全部课程
+            </button>
+            {lessonOptions.map((lesson) => (
+              <button
+                key={lesson.id}
+                type="button"
+                className={`filter-chip ${selectedLessonId === lesson.id ? 'filter-chip-active' : ''}`}
+                onClick={() => setSelectedLessonId(lesson.id)}
+              >
+                {lesson.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="toggle-row">
+            <button
+              type="button"
+              className={`toggle-chip ${favoritesOnly ? 'toggle-chip-active' : ''}`}
+              onClick={() => setFavoritesOnly((current) => !current)}
+            >
+              只看收藏
+            </button>
+            <button
+              type="button"
+              className={`toggle-chip ${onlyBacking ? 'toggle-chip-active' : ''}`}
+              onClick={() => setOnlyBacking((current) => !current)}
+            >
+              只看有伴奏
+            </button>
+          </div>
+        </div>
+
+        <div className="library-grid">
+          <div className="song-list">
+            {filteredSongs.length > 0 ? (
+              filteredSongs.map((song) => {
+                const selected = song.id === activeSong?.id
+                const favorite = favoriteSongIdSet.has(song.id)
+
+                return (
+                  <article
+                    key={song.id}
+                    className={`song-card ${selected ? 'song-card-active' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="song-card-main"
+                      onClick={() => handleSongSelect(song.id, true)}
+                    >
+                      <div className="song-card-top">
+                        <div>
+                          <strong>{song.title}</strong>
+                          <span>{song.lessonName}</span>
+                        </div>
+                        <span className="song-level">{song.level ?? '自由练习'}</span>
+                      </div>
+
+                      <div className="song-tags">
+                        {song.tags.map((tag) => (
+                          <b key={`${song.id}-${tag}`}>{tag}</b>
+                        ))}
+                      </div>
+
+                      <div className="song-variants">
+                        {variantOptions.map((variant) => (
+                          <span
+                            key={`${song.id}-${variant.id}`}
+                            className={`variant-pill ${song.availableVariants.includes(variant.id) ? 'variant-pill-live' : ''}`}
+                          >
+                            {variant.label}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`favorite-button ${favorite ? 'favorite-button-active' : ''}`}
+                      onClick={() => toggleFavorite(song.id)}
+                      aria-label={favorite ? '取消收藏' : '收藏这首歌'}
+                    >
+                      <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
+                    </button>
+                  </article>
+                )
+              })
+            ) : (
+              <div className="empty-state">
+                <p>当前筛选条件下没有乐曲。</p>
+                <small>试着清空搜索、关闭“只看收藏”或切回全部课程。</small>
+              </div>
+            )}
+          </div>
+
+          <div className="player-deck">
+            {activeSong && activeTrack ? (
+              <>
+                <div className="player-head">
+                  <p className="panel-label">Now playing</p>
+                  <h3>{activeSong.title}</h3>
+                  <p className="player-subtitle">
+                    {activeSong.lessonName} · {activeTrack.label} · {activeSong.level ?? '自由练习'}
+                  </p>
+                </div>
+
+                <div className="player-art">
+                  <div className="player-art-core">
+                    <span>{activeSong.lessonName}</span>
+                    <strong>{activeSong.title}</strong>
+                    <small>{activeTrack.label}</small>
+                  </div>
+                </div>
+
+                <div className="variant-row">
+                  {variantOptions
+                    .filter((variant) => activeSong.variants[variant.id])
+                    .map((variant) => (
+                      <button
+                        key={`${activeSong.id}-${variant.id}`}
+                        type="button"
+                        className={`variant-switch ${preferredVariant === variant.id ? 'variant-switch-active' : ''}`}
+                        onClick={() => handleVariantSelect(variant.id)}
+                      >
+                        {variant.label}
+                      </button>
+                    ))}
+                </div>
+
+                <div className="progress-block">
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    step="0.1"
+                    value={Math.min(currentTime, duration || 0)}
+                    onChange={(event) => {
+                      const audio = audioRef.current
+                      const nextTime = Number(event.target.value)
+
+                      if (!audio) {
+                        return
+                      }
+
+                      audio.currentTime = nextTime
+                      setCurrentTime(nextTime)
+                    }}
+                  />
+                  <div className="time-row">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+
+                <div className="transport-row">
+                  <button type="button" className="transport-button" onClick={() => jumpSong(-1)}>
+                    <SkipBack size={18} />
+                  </button>
+                  <button type="button" className="transport-button transport-button-primary" onClick={() => void togglePlayback()}>
+                    {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+                  </button>
+                  <button type="button" className="transport-button" onClick={() => jumpSong(1)}>
+                    <SkipForward size={18} />
+                  </button>
+                </div>
+
+                <div className="player-controls-grid">
+                  <div className="control-block">
+                    <span>播放速度</span>
+                    <div className="rate-row">
+                      {[0.75, 1, 1.25, 1.5].map((rate) => (
+                        <button
+                          key={rate}
+                          type="button"
+                          className={`rate-chip ${playbackRate === rate ? 'rate-chip-active' : ''}`}
+                          onClick={() => setPlaybackRate(rate)}
+                        >
+                          {rate}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="control-block">
+                    <span>练习开关</span>
+                    <div className="rate-row">
+                      <button
+                        type="button"
+                        className={`rate-chip ${loopEnabled ? 'rate-chip-active' : ''}`}
+                        onClick={() => setLoopEnabled((current) => !current)}
+                      >
+                        <Repeat size={14} />
+                        <span>循环单曲</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`rate-chip ${favoriteSongIdSet.has(activeSong.id) ? 'rate-chip-active' : ''}`}
+                        onClick={() => toggleFavorite(activeSong.id)}
+                      >
+                        <Star size={14} fill={favoriteSongIdSet.has(activeSong.id) ? 'currentColor' : 'none'} />
+                        <span>收藏</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state player-empty">
+                <p>还没有可播放的乐曲。</p>
+                <small>确认项目曲库已导入，或者放宽当前筛选条件。</small>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
