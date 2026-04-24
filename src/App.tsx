@@ -5,7 +5,6 @@ import {
   CircleAlert,
   Gauge,
   Guitar,
-  Mic,
   Pause,
   Play,
   Radio,
@@ -203,26 +202,26 @@ function App() {
 
   const currentTip = useMemo(() => {
     if (status === 'error') {
-      return '浏览器没有拿到音频输入权限，请允许麦克风访问并重试。'
+      return 'Browser microphone permission is missing. Allow audio input and reconnect.'
     }
 
     if (!signalPresent) {
-      return '拨动单根空弦并保持 1 到 2 秒，让检测器稳定锁定基频。'
+      return 'Play a single open string and let the tuner lock the fundamental for one or two seconds.'
     }
 
     if (snapshot.level < 0.01) {
-      return '输入偏弱。把 Scarlett Solo 的增益调到指示环轻微发绿，避免一直发红。'
+      return 'Input is weak. Raise Scarlett Solo gain until the ring flashes green gently.'
     }
 
     if (snapshot.clarity < 0.94) {
-      return '当前泛音偏多。试着在拾音器中间位置拨弦，或者放轻右手。'
+      return 'The note is rich in overtones. Try plucking closer to the middle and a little softer.'
     }
 
     if (perfectlyTuned) {
-      return `${targetString} 已非常接近目标音高，可以切到下一根弦。`
+      return `${targetString} is centered. Move on to the next string when ready.`
     }
 
-    return tuningCents > 0 ? '当前偏高，稍微放松弦钮。' : '当前偏低，慢慢收紧弦钮。'
+    return tuningCents > 0 ? 'Pitch is sharp. Loosen the tuner slightly.' : 'Pitch is flat. Tighten the tuner slowly.'
   }, [perfectlyTuned, signalPresent, snapshot.clarity, snapshot.level, status, targetString, tuningCents])
 
   const deviceHint = useMemo(() => {
@@ -231,15 +230,35 @@ function App() {
     }
 
     if (activeInput && namedDevices.length <= 1) {
-      return `当前浏览器实际使用的输入是：${activeInput.label}`
+      return `Browser is currently monitoring: ${activeInput.label}`
     }
 
     if (aliasOnly) {
-      return '浏览器目前只暴露了默认输入别名。通常重新授权麦克风、关闭占用声卡的软件，或重开页面后会恢复完整列表。'
+      return 'The browser only exposed default aliases. Reconnect the interface or refresh permission to restore the full list.'
     }
 
-    return '建议把贝斯接到 Scarlett Solo 的 INST 档，并关闭系统级自动增益、降噪与回声消除。'
+    return 'Use the INST input on Scarlett Solo and disable OS-level noise suppression or auto gain.'
   }, [activeInput, aliasOnly, error, namedDevices.length])
+
+  const spotlightSongs = filteredSongs.slice(0, 5)
+  const queueSongs = filteredSongs.slice(0, 8)
+  const quickStats = [
+    {
+      label: 'Library',
+      value: `${librarySongs.length} tracks`,
+      detail: `${backingReadyCount} backing versions`,
+    },
+    {
+      label: 'Favorites',
+      value: `${favoriteSongIds.length}`,
+      detail: 'Saved practice picks',
+    },
+    {
+      label: 'Input',
+      value: activeInput?.label ?? 'Awaiting input',
+      detail: status === 'running' ? 'Live monitoring' : 'Reconnect if needed',
+    },
+  ]
 
   useEffect(() => {
     window.localStorage.setItem('bass-record.device', selectedDeviceId)
@@ -308,11 +327,13 @@ function App() {
         JSON.stringify(playbackPositionsRef.current),
       )
     }
+
     const onLoadStart = () => {
       lastSavedSecondRef.current = -1
       setCurrentTime(0)
       setDuration(0)
     }
+
     const onLoadedMetadata = () => {
       if (activeSong) {
         const resumeAt = playbackPositionsRef.current[activeSong.id] ?? 0
@@ -327,6 +348,7 @@ function App() {
       setDuration(audio.duration || 0)
       setCurrentTime(audio.currentTime || 0)
     }
+
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
     const onEnded = () => {
@@ -507,437 +529,487 @@ function App() {
     setPreferredVariant(variant)
   }
 
-  // RENDER
   return (
-    <div className="app-shell">
+    <div className="app-shell app-window">
       <div className="noise-overlay" />
       <audio ref={audioRef} preload="metadata" src={activeTrack?.filePath} />
 
-      <header className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Scarlett-inspired bass workstation</p>
-          <h1>Redline Bass Tuner</h1>
-          <p className="hero-text">
-            面向电贝斯直插接口的实时调音器，专门针对低频响应和 Scarlett Solo 这类声卡的使用场景做了优化。
-          </p>
-        </div>
-
-        <div className="hero-status">
-          <div className={`status-chip status-${status}`}>
-            <Radio size={16} />
-            <span>
-              {status === 'running' && 'Input armed'}
-              {status === 'requesting' && 'Waiting permission'}
-              {status === 'idle' && 'Standby'}
-              {status === 'error' && 'Input error'}
-            </span>
-          </div>
-
-          <div className={`status-chip ${perfectlyTuned ? 'status-tuned' : 'status-live'}`}>
-            <Gauge size={16} />
-            <span>{perfectlyTuned ? 'Perfectly tuned' : 'Tracking pitch'}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="main-grid">
-        <section className="panel tuner-panel">
-          <div className="panel-header">
-            <div>
-              <p className="panel-label">Main tuner</p>
-              <h2>实时音高</h2>
-            </div>
-            <div className="panel-meta">
-              <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'No pitch yet'}</span>
-              <span>{signalPresent ? `Target ${formatFrequency(targetFrequency)}` : 'Awaiting note'}</span>
-            </div>
-          </div>
-
-          <div className={`tuner-stage ${perfectlyTuned ? 'tuner-stage-tuned' : ''}`}>
-            {perfectlyTuned && (
-              <div className="tune-badge">
-                <Sparkles size={16} />
-                <span>已校准</span>
-              </div>
-            )}
-
-            <div className="note-lockup">
-              <span className="note-name">{noteParts.pitchClass}</span>
-              <span className="note-octave">{noteParts.octave}</span>
-              <p className="note-subtitle">
-                当前匹配弦 <strong>{targetString}</strong> · 目标频率 {formatFrequency(targetFrequency)}
-              </p>
-            </div>
-
-            <div className="meter-shell">
-              <div className="meter-scale">
-                {[-50, -30, -10, 0, 10, 30, 50].map((tick) => (
-                  <span
-                    key={tick}
-                    className={`meter-tick ${tick === 0 ? 'meter-tick-center' : ''}`}
-                    style={{ left: `${tick + 50}%` }}
-                  >
-                    <i />
-                    <small>{tick}</small>
-                  </span>
-                ))}
-                <div className={`tolerance-zone ${inTune ? 'tolerance-zone-hot' : ''}`} />
-                <div className="needle" style={{ left: needleOffset }} />
-              </div>
-
-              <div className="meter-readout">
-                <span className={tuningCents > 0 ? 'sharp' : 'flat'}>
-                  {signalPresent
-                    ? `${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`
-                    : 'Waiting for direct signal'}
-                </span>
-                <strong>{perfectlyTuned ? 'Perfect' : inTune && signalPresent ? 'Close enough' : 'Adjust slowly'}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="string-grid">
-            {tuning.strings.map((item) => {
-              const active = snapshot.stringMatch?.note === item.note
-              const itemCents = active ? Math.abs(snapshot.stringMatch?.cents ?? 999) : null
-              const itemTuned = itemCents !== null && itemCents <= 5
-
-              return (
-                <button
-                  key={item.note}
-                  type="button"
-                  className={`string-card ${active ? 'string-card-active' : ''} ${itemTuned ? 'string-card-tuned' : ''}`}
-                  onClick={() => {
-                    setReferenceStringNote(item.note)
-                    setReferenceEnabled(true)
-                  }}
-                >
-                  <span>{item.label}</span>
-                  <strong>{item.note}</strong>
-                  <small>{formatFrequency(midiToFrequency(item.midi, concertA))}</small>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="insight-strip">
-            <article className="mini-stat">
-              <AudioLines size={18} />
-              <div>
-                <span>Signal</span>
-                <strong>{signalLevel}%</strong>
-              </div>
-            </article>
-            <article className="mini-stat">
-              <Activity size={18} />
-              <div>
-                <span>Clarity</span>
-                <strong>{clarityPercent}%</strong>
-              </div>
-            </article>
-            <article className="mini-stat">
-              <Guitar size={18} />
-              <div>
-                <span>Preset</span>
-                <strong>{tuning.subtitle}</strong>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <aside className="control-stack">
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-label">Input path</p>
-                <h2>设备与校准</h2>
-              </div>
-              <button type="button" className="icon-button" onClick={() => void restart()}>
-                <RefreshCw size={16} />
-                <span>重新连接</span>
-              </button>
-            </div>
-
-            <label className="field">
-              <span>Audio input</span>
-              <select
-                value={visibleDeviceId}
-                onChange={(event) => setSelectedDeviceId(event.target.value)}
-              >
-                <option value="">默认输入设备</option>
-                {devices.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="device-summary">
-              <div className="device-badge">
-                <Mic size={16} />
-                <span>已发现 {devices.length} 个输入条目</span>
-              </div>
-              {activeInput ? (
-                <p className="device-active">当前活跃输入：{activeInput.label}</p>
-              ) : (
-                <p className="device-active">当前活跃输入：等待浏览器建立音频流</p>
-              )}
-            </div>
-
-            <label className="field">
-              <span>Concert A</span>
-              <div className="slider-row">
-                <input
-                  type="range"
-                  min="430"
-                  max="450"
-                  step="1"
-                  value={concertA}
-                  onChange={(event) => setConcertA(Number(event.target.value))}
-                />
-                <strong>{concertA} Hz</strong>
-              </div>
-              <small className="field-help">
-                这是音高体系的参考基准。标准值是 A4 = 440 Hz；如果你要跟随钢琴、旧录音或其他非标准参考音，可以在这里微调。
-              </small>
-            </label>
-
-            <div className={`callout ${error ? 'error-callout' : ''}`}>
-              {error ? <CircleAlert size={18} /> : <SlidersHorizontal size={18} />}
-              <p>{deviceHint}</p>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-label">Tuning library</p>
-                <h2>调弦预设</h2>
-              </div>
-            </div>
-
-            <div className="preset-grid">
-              {tuningPresets.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`preset-card ${item.id === tuning.id ? 'preset-card-active' : ''}`}
-                  onClick={() => setSelectedTuningId(item.id)}
-                >
-                  <strong>{item.name}</strong>
-                  <span>{item.subtitle}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-label">Reference tone</p>
-                <h2>参考音</h2>
-              </div>
-              <button
-                type="button"
-                className={`icon-button ${referenceEnabled ? 'icon-button-live' : ''}`}
-                onClick={() => setReferenceEnabled((current) => !current)}
-              >
-                <Volume2 size={16} />
-                <span>{referenceEnabled ? '停止' : '播放'}</span>
-              </button>
-            </div>
-
-            <div className="reference-grid">
-              {tuning.strings.map((item) => (
-                <button
-                  key={item.note}
-                  type="button"
-                  className={`reference-pill ${item.note === activeReferenceNote ? 'reference-pill-active' : ''}`}
-                  onClick={() => {
-                    setReferenceStringNote(item.note)
-                    setReferenceEnabled(true)
-                  }}
-                >
-                  {item.note}
-                </button>
-              ))}
-            </div>
-
-            <p className="secondary-copy">
-              参考音会同时输出基频与高八度，让耳机和小音箱上更容易辨认。
-            </p>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <p className="panel-label">Assistant</p>
-                <h2>演奏辅助</h2>
-              </div>
-            </div>
-
-            <div className="tip-box">
-              <p>{currentTip}</p>
-            </div>
-
-            <div className="history-row">
-              <span>Recent locks</span>
-              <div>
-                {history.length > 0 ? (
-                  history.map((item, index) => <b key={`${item}-${index}`}>{item}</b>)
-                ) : (
-                  <b>--</b>
-                )}
-              </div>
-            </div>
-          </section>
-        </aside>
-      </main>
-
-      <section className="panel library-panel">
-        <div className="panel-header">
+      <aside className="app-sidebar">
+        <div className="sidebar-brand">
+          <div className="brand-mark">R</div>
           <div>
-            <p className="panel-label">Practice library</p>
-            <h2>伴奏曲库</h2>
-          </div>
-          <div className="panel-meta">
-            <span>{librarySongs.length} 首乐曲</span>
-            <span>{backingReadyCount} 首可直接切伴奏</span>
+            <strong>Redline Bass</strong>
+            <span>Scarlett practice desk</span>
           </div>
         </div>
 
-        <div className="library-toolbar">
-          <label className="search-box">
+        <nav className="sidebar-nav">
+          <button type="button" className="sidebar-link sidebar-link-active">Overview</button>
+          <button type="button" className="sidebar-link">Tuner</button>
+          <button type="button" className="sidebar-link">Library</button>
+          <button type="button" className="sidebar-link">Practice</button>
+          <button type="button" className="sidebar-link">Input</button>
+        </nav>
+
+        <div className="sidebar-section">
+          <p className="panel-label">Quick Stats</p>
+          {quickStats.map((stat) => (
+            <article key={stat.label} className="sidebar-stat">
+              <span>{stat.label}</span>
+              <strong>{stat.value}</strong>
+              <small>{stat.detail}</small>
+            </article>
+          ))}
+        </div>
+      </aside>
+
+      <section className="app-main">
+        <header className="topbar">
+          <label className="topbar-search">
             <Search size={18} />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="搜索歌曲、课程、等级"
+              placeholder="Search tracks, lessons, levels"
             />
           </label>
 
-          <div className="filter-group">
-            <button
-              type="button"
-              className={`filter-chip ${selectedLessonId === 'all' ? 'filter-chip-active' : ''}`}
-              onClick={() => setSelectedLessonId('all')}
-            >
-              全部课程
-            </button>
-            {lessonOptions.map((lesson) => (
-              <button
-                key={lesson.id}
-                type="button"
-                className={`filter-chip ${selectedLessonId === lesson.id ? 'filter-chip-active' : ''}`}
-                onClick={() => setSelectedLessonId(lesson.id)}
-              >
-                {lesson.name}
-              </button>
-            ))}
+          <div className="topbar-actions">
+            <div className={`status-chip status-${status}`}>
+              <Radio size={16} />
+              <span>{status === 'running' ? 'Input armed' : status === 'requesting' ? 'Waiting permission' : status === 'error' ? 'Input error' : 'Standby'}</span>
+            </div>
+            <div className={`status-chip ${perfectlyTuned ? 'status-tuned' : 'status-live'}`}>
+              <Gauge size={16} />
+              <span>{perfectlyTuned ? 'Perfectly tuned' : 'Tracking pitch'}</span>
+            </div>
           </div>
+        </header>
 
-          <div className="toggle-row">
-            <button
-              type="button"
-              className={`toggle-chip ${favoritesOnly ? 'toggle-chip-active' : ''}`}
-              onClick={() => setFavoritesOnly((current) => !current)}
-            >
-              只看收藏
-            </button>
-            <button
-              type="button"
-              className={`toggle-chip ${onlyBacking ? 'toggle-chip-active' : ''}`}
-              onClick={() => setOnlyBacking((current) => !current)}
-            >
-              只看有伴奏
-            </button>
-          </div>
-        </div>
+        <div className="content-scroll">
+          <section className="hero-grid">
+            <article className="hero-card hero-card-primary">
+              <p className="panel-label">Live tuning</p>
+              <strong>{noteParts.pitchClass}{noteParts.octave}</strong>
+              <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'Waiting for note'}</span>
+              <small>{perfectlyTuned ? 'Locked at center' : currentTip}</small>
+            </article>
+            <article className="hero-card">
+              <p className="panel-label">Current target</p>
+              <strong>{targetString}</strong>
+              <span>{formatFrequency(targetFrequency)}</span>
+              <small>{Math.abs(tuningCents).toFixed(1)} cents {tuningCents > 0 ? 'sharp' : 'flat'}</small>
+            </article>
+            <article className="hero-card">
+              <p className="panel-label">Practice library</p>
+              <strong>{librarySongs.length}</strong>
+              <span>Total tracks</span>
+              <small>{backingReadyCount} with backing versions</small>
+            </article>
+            <article className="hero-card">
+              <p className="panel-label">Input path</p>
+              <strong>{activeInput?.label ?? 'No active input'}</strong>
+              <span>{devices.length} devices detected</span>
+              <small>{deviceHint}</small>
+            </article>
+          </section>
 
-        <div className="library-grid">
-          <div className="song-list">
-            {filteredSongs.length > 0 ? (
-              filteredSongs.map((song) => {
-                const selected = song.id === activeSong?.id
-                const favorite = favoriteSongIdSet.has(song.id)
-
-                return (
-                  <article
-                    key={song.id}
-                    className={`song-card ${selected ? 'song-card-active' : ''}`}
-                  >
-                    <button
-                      type="button"
-                      className="song-card-main"
-                      onClick={() => handleSongSelect(song.id, true)}
-                    >
-                      <div className="song-card-top">
-                        <div>
-                          <strong>{song.title}</strong>
-                          <span>{song.lessonName}</span>
-                        </div>
-                        <span className="song-level">{song.level ?? '自由练习'}</span>
-                      </div>
-
-                      <div className="song-tags">
-                        {song.tags.map((tag) => (
-                          <b key={`${song.id}-${tag}`}>{tag}</b>
-                        ))}
-                      </div>
-
-                      <div className="song-variants">
-                        {variantOptions.map((variant) => (
-                          <span
-                            key={`${song.id}-${variant.id}`}
-                            className={`variant-pill ${song.availableVariants.includes(variant.id) ? 'variant-pill-live' : ''}`}
-                          >
-                            {variant.label}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`favorite-button ${favorite ? 'favorite-button-active' : ''}`}
-                      onClick={() => toggleFavorite(song.id)}
-                      aria-label={favorite ? '取消收藏' : '收藏这首歌'}
-                    >
-                      <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
-                    </button>
-                  </article>
-                )
-              })
-            ) : (
-              <div className="empty-state">
-                <p>当前筛选条件下没有乐曲。</p>
-                <small>试着清空搜索、关闭“只看收藏”或切回全部课程。</small>
+          <section className="content-section">
+            <div className="section-heading">
+              <div>
+                <p className="panel-label">Continue practice</p>
+                <h2>Queue</h2>
               </div>
-            )}
-          </div>
+              <div className="toggle-row">
+                <button
+                  type="button"
+                  className={`toggle-chip ${favoritesOnly ? 'toggle-chip-active' : ''}`}
+                  onClick={() => setFavoritesOnly((current) => !current)}
+                >
+                  Favorites only
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-chip ${onlyBacking ? 'toggle-chip-active' : ''}`}
+                  onClick={() => setOnlyBacking((current) => !current)}
+                >
+                  Backing only
+                </button>
+              </div>
+            </div>
 
-          <div className="player-deck">
-            {activeSong && activeTrack ? (
-              <>
-                <div className="player-head">
-                  <p className="panel-label">Now playing</p>
-                  <h3>{activeSong.title}</h3>
-                  <p className="player-subtitle">
-                    {activeSong.lessonName} · {activeTrack.label} · {activeSong.level ?? '自由练习'}
+            <div className="spotlight-row">
+              {spotlightSongs.map((song) => (
+                <button
+                  key={song.id}
+                  type="button"
+                  className={`spotlight-card ${song.id === activeSong?.id ? 'spotlight-card-active' : ''}`}
+                  onClick={() => handleSongSelect(song.id, true)}
+                >
+                  <span>{song.lessonName}</span>
+                  <strong>{song.title}</strong>
+                  <small>{song.level ?? 'Open practice'}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <div className="workspace-grid">
+            <section className="panel tuner-panel">
+              <div className="section-heading">
+                <div>
+                  <p className="panel-label">Tuner deck</p>
+                  <h2>Main Tuner</h2>
+                </div>
+                <div className="panel-meta">
+                  <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'No pitch yet'}</span>
+                  <span>{signalPresent ? `Target ${formatFrequency(targetFrequency)}` : 'Awaiting note'}</span>
+                </div>
+              </div>
+
+              <div className={`tuner-stage ${perfectlyTuned ? 'tuner-stage-tuned' : ''}`}>
+                {perfectlyTuned && (
+                  <div className="tune-badge">
+                    <Sparkles size={16} />
+                    <span>In tune</span>
+                  </div>
+                )}
+
+                <div className="note-lockup">
+                  <span className="note-name">{noteParts.pitchClass}</span>
+                  <span className="note-octave">{noteParts.octave}</span>
+                  <p className="note-subtitle">
+                    Target <strong>{targetString}</strong> · {formatFrequency(targetFrequency)}
                   </p>
                 </div>
 
-                <div className="player-art">
-                  <div className="player-art-core">
-                    <span>{activeSong.lessonName}</span>
-                    <strong>{activeSong.title}</strong>
-                    <small>{activeTrack.label}</small>
+                <div className="meter-shell">
+                  <div className="meter-scale">
+                    {[-50, -30, -10, 0, 10, 30, 50].map((tick) => (
+                      <span
+                        key={tick}
+                        className={`meter-tick ${tick === 0 ? 'meter-tick-center' : ''}`}
+                        style={{ left: `${tick + 50}%` }}
+                      >
+                        <i />
+                        <small>{tick}</small>
+                      </span>
+                    ))}
+                    <div className={`tolerance-zone ${inTune ? 'tolerance-zone-hot' : ''}`} />
+                    <div className="needle" style={{ left: needleOffset }} />
+                  </div>
+
+                  <div className="meter-readout">
+                    <span className={tuningCents > 0 ? 'sharp' : 'flat'}>
+                      {signalPresent
+                        ? `${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`
+                        : 'Waiting for direct signal'}
+                    </span>
+                    <strong>{perfectlyTuned ? 'Perfect' : inTune && signalPresent ? 'Close enough' : 'Adjust slowly'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="string-grid">
+                {tuning.strings.map((item) => {
+                  const active = snapshot.stringMatch?.note === item.note
+                  const itemCents = active ? Math.abs(snapshot.stringMatch?.cents ?? 999) : null
+                  const itemTuned = itemCents !== null && itemCents <= 5
+
+                  return (
+                    <button
+                      key={item.note}
+                      type="button"
+                      className={`string-card ${active ? 'string-card-active' : ''} ${itemTuned ? 'string-card-tuned' : ''}`}
+                      onClick={() => {
+                        setReferenceStringNote(item.note)
+                        setReferenceEnabled(true)
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <strong>{item.note}</strong>
+                      <small>{formatFrequency(midiToFrequency(item.midi, concertA))}</small>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="insight-strip">
+                <article className="mini-stat">
+                  <AudioLines size={18} />
+                  <div>
+                    <span>Signal</span>
+                    <strong>{signalLevel}%</strong>
+                  </div>
+                </article>
+                <article className="mini-stat">
+                  <Activity size={18} />
+                  <div>
+                    <span>Clarity</span>
+                    <strong>{clarityPercent}%</strong>
+                  </div>
+                </article>
+                <article className="mini-stat">
+                  <Guitar size={18} />
+                  <div>
+                    <span>Preset</span>
+                    <strong>{tuning.subtitle}</strong>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <aside className="workspace-side">
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="panel-label">Controls</p>
+                    <h2>Rig</h2>
+                  </div>
+                  <button type="button" className="icon-button" onClick={() => void restart()}>
+                    <RefreshCw size={16} />
+                    <span>Reconnect</span>
+                  </button>
+                </div>
+
+                <label className="field">
+                  <span>Audio input</span>
+                  <select
+                    value={visibleDeviceId}
+                    onChange={(event) => setSelectedDeviceId(event.target.value)}
+                  >
+                    <option value="">Default input</option>
+                    {devices.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Concert A</span>
+                  <div className="slider-row">
+                    <input
+                      type="range"
+                      min="430"
+                      max="450"
+                      step="1"
+                      value={concertA}
+                      onChange={(event) => setConcertA(Number(event.target.value))}
+                    />
+                    <strong>{concertA} Hz</strong>
+                  </div>
+                </label>
+
+                <div className="preset-grid">
+                  {tuningPresets.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`preset-card ${item.id === tuning.id ? 'preset-card-active' : ''}`}
+                      onClick={() => setSelectedTuningId(item.id)}
+                    >
+                      <strong>{item.name}</strong>
+                      <span>{item.subtitle}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className={`callout ${error ? 'error-callout' : ''}`}>
+                  {error ? <CircleAlert size={18} /> : <SlidersHorizontal size={18} />}
+                  <p>{deviceHint}</p>
+                </div>
+              </section>
+
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="panel-label">Reference</p>
+                    <h2>Reference Tone</h2>
+                  </div>
+                  <button
+                    type="button"
+                    className={`icon-button ${referenceEnabled ? 'icon-button-live' : ''}`}
+                    onClick={() => setReferenceEnabled((current) => !current)}
+                  >
+                    <Volume2 size={16} />
+                    <span>{referenceEnabled ? 'Stop' : 'Play'}</span>
+                  </button>
+                </div>
+
+                <div className="reference-grid">
+                  {tuning.strings.map((item) => (
+                    <button
+                      key={item.note}
+                      type="button"
+                      className={`reference-pill ${item.note === activeReferenceNote ? 'reference-pill-active' : ''}`}
+                      onClick={() => {
+                        setReferenceStringNote(item.note)
+                        setReferenceEnabled(true)
+                      }}
+                    >
+                      {item.note}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="tip-box">
+                  <p>{currentTip}</p>
+                </div>
+
+                <div className="history-row">
+                  <span>Recent locks</span>
+                  <div>
+                    {history.length > 0 ? (
+                      history.map((item, index) => <b key={`${item}-${index}`}>{item}</b>)
+                    ) : (
+                      <b>--</b>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel library-panel app-library-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="panel-label">Library</p>
+                    <h2>Tracks</h2>
+                  </div>
+                  <div className="filter-group">
+                    <button
+                      type="button"
+                      className={`filter-chip ${selectedLessonId === 'all' ? 'filter-chip-active' : ''}`}
+                      onClick={() => setSelectedLessonId('all')}
+                    >
+                      All
+                    </button>
+                    {lessonOptions.map((lesson) => (
+                      <button
+                        key={lesson.id}
+                        type="button"
+                        className={`filter-chip ${selectedLessonId === lesson.id ? 'filter-chip-active' : ''}`}
+                        onClick={() => setSelectedLessonId(lesson.id)}
+                      >
+                        {lesson.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="variant-row">
-                  {variantOptions
+                <div className="song-list compact-song-list">
+                  {queueSongs.length > 0 ? (
+                    queueSongs.map((song) => {
+                      const favorite = favoriteSongIdSet.has(song.id)
+
+                      return (
+                        <article
+                          key={song.id}
+                          className={`song-card ${song.id === activeSong?.id ? 'song-card-active' : ''}`}
+                        >
+                          <button
+                            type="button"
+                            className="song-card-main"
+                            onClick={() => handleSongSelect(song.id, true)}
+                          >
+                            <div className="song-card-top">
+                              <div>
+                                <strong>{song.title}</strong>
+                                <span>{song.lessonName}</span>
+                              </div>
+                              <span className="song-level">{song.level ?? 'Practice'}</span>
+                            </div>
+                            <div className="song-variants">
+                              {variantOptions
+                                .filter((variant) => song.availableVariants.includes(variant.id))
+                                .map((variant) => (
+                                  <span key={`${song.id}-${variant.id}`} className="variant-pill variant-pill-live">
+                                    {variant.label}
+                                  </span>
+                                ))}
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className={`favorite-button ${favorite ? 'favorite-button-active' : ''}`}
+                            onClick={() => toggleFavorite(song.id)}
+                            aria-label={favorite ? 'Unfavorite track' : 'Favorite track'}
+                          >
+                            <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
+                          </button>
+                        </article>
+                      )
+                    })
+                  ) : (
+                    <div className="empty-state">
+                      <p>No tracks match the current filter.</p>
+                      <small>Try clearing search or turning off favorites-only mode.</small>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+
+        <footer className="bottom-player">
+          <div className="player-now">
+            <div className="player-avatar">{activeSong?.lessonName ?? 'Bass'}</div>
+            <div>
+              <strong>{activeSong?.title ?? 'No track selected'}</strong>
+              <span>
+                {activeTrack ? `${activeTrack.label} · ${activeSong?.lessonName ?? ''}` : 'Select a practice track'}
+              </span>
+            </div>
+          </div>
+
+          <div className="player-center">
+            <div className="transport-row">
+              <button type="button" className="transport-button" onClick={() => jumpSong(-1)}>
+                <SkipBack size={18} />
+              </button>
+              <button
+                type="button"
+                className="transport-button transport-button-primary"
+                onClick={() => void togglePlayback()}
+              >
+                {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+              </button>
+              <button type="button" className="transport-button" onClick={() => jumpSong(1)}>
+                <SkipForward size={18} />
+              </button>
+            </div>
+
+            <div className="progress-block">
+              <input
+                type="range"
+                min="0"
+                max={duration || 0}
+                step="0.1"
+                value={Math.min(currentTime, duration || 0)}
+                onChange={(event) => {
+                  const audio = audioRef.current
+                  const nextTime = Number(event.target.value)
+
+                  if (!audio) {
+                    return
+                  }
+
+                  audio.currentTime = nextTime
+                  setCurrentTime(nextTime)
+                }}
+              />
+              <div className="time-row">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="player-right">
+            <div className="variant-row">
+              {activeSong
+                ? variantOptions
                     .filter((variant) => activeSong.variants[variant.id])
                     .map((variant) => (
                       <button
@@ -948,94 +1020,32 @@ function App() {
                       >
                         {variant.label}
                       </button>
-                    ))}
-                </div>
+                    ))
+                : null}
+            </div>
 
-                <div className="progress-block">
-                  <input
-                    type="range"
-                    min="0"
-                    max={duration || 0}
-                    step="0.1"
-                    value={Math.min(currentTime, duration || 0)}
-                    onChange={(event) => {
-                      const audio = audioRef.current
-                      const nextTime = Number(event.target.value)
-
-                      if (!audio) {
-                        return
-                      }
-
-                      audio.currentTime = nextTime
-                      setCurrentTime(nextTime)
-                    }}
-                  />
-                  <div className="time-row">
-                    <span>{formatTime(currentTime)}</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                </div>
-
-                <div className="transport-row">
-                  <button type="button" className="transport-button" onClick={() => jumpSong(-1)}>
-                    <SkipBack size={18} />
-                  </button>
-                  <button type="button" className="transport-button transport-button-primary" onClick={() => void togglePlayback()}>
-                    {isPlaying ? <Pause size={22} /> : <Play size={22} />}
-                  </button>
-                  <button type="button" className="transport-button" onClick={() => jumpSong(1)}>
-                    <SkipForward size={18} />
-                  </button>
-                </div>
-
-                <div className="player-controls-grid">
-                  <div className="control-block">
-                    <span>播放速度</span>
-                    <div className="rate-row">
-                      {[0.75, 1, 1.25, 1.5].map((rate) => (
-                        <button
-                          key={rate}
-                          type="button"
-                          className={`rate-chip ${playbackRate === rate ? 'rate-chip-active' : ''}`}
-                          onClick={() => setPlaybackRate(rate)}
-                        >
-                          {rate}x
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="control-block">
-                    <span>练习开关</span>
-                    <div className="rate-row">
-                      <button
-                        type="button"
-                        className={`rate-chip ${loopEnabled ? 'rate-chip-active' : ''}`}
-                        onClick={() => setLoopEnabled((current) => !current)}
-                      >
-                        <Repeat size={14} />
-                        <span>循环单曲</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`rate-chip ${favoriteSongIdSet.has(activeSong.id) ? 'rate-chip-active' : ''}`}
-                        onClick={() => toggleFavorite(activeSong.id)}
-                      >
-                        <Star size={14} fill={favoriteSongIdSet.has(activeSong.id) ? 'currentColor' : 'none'} />
-                        <span>收藏</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="empty-state player-empty">
-                <p>还没有可播放的乐曲。</p>
-                <small>确认项目曲库已导入，或者放宽当前筛选条件。</small>
-              </div>
-            )}
+            <div className="rate-row">
+              {[0.75, 1, 1.25, 1.5].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  className={`rate-chip ${playbackRate === rate ? 'rate-chip-active' : ''}`}
+                  onClick={() => setPlaybackRate(rate)}
+                >
+                  {rate}x
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`rate-chip ${loopEnabled ? 'rate-chip-active' : ''}`}
+                onClick={() => setLoopEnabled((current) => !current)}
+              >
+                <Repeat size={14} />
+                <span>Loop</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </footer>
       </section>
     </div>
   )

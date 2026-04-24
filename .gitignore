@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local practice audio library
+public/library/*
+!public/library/.gitkeep

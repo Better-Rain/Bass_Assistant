@@ -1,51 +1,48 @@
 # Redline Bass Tuner
 
-一个为电贝斯直插场景设计的调音与练习辅助工具，UI 灵感来自 Focusrite Scarlett Solo 的红色金属壳与黑色面板。
+Redline Bass Tuner is a bass practice tool focused on direct-input workflow. The visual style is inspired by the red metal shell and black faceplate of the Focusrite Scarlett Solo.
 
-## 功能
+## Features
 
-- 实时音高检测，适配低频贝斯信号
-- 调音指针、目标弦与目标频率显示
-- 输入设备切换与当前活跃输入显示
-- `A4 = 430 ~ 450 Hz` 校准
-- 多个调弦预设：4 弦标准、Drop D、5 弦标准、Tenor Bass
-- 参考音播放，同时叠加高八度便于辨认
-- 信号强度、清晰度和最近锁定音符提示
-- 内置伴奏曲库，支持按课程分类浏览
-- 乐曲搜索、收藏、版本切换、播放速度调节和单曲循环
+- Real-time bass tuner with note name, target string, target frequency, and cents offset
+- Multiple tuning presets: 4-string standard, Drop D, 5-string standard, and Tenor Bass
+- Audio input selection with active input display
+- Concert pitch calibration with `A4 = 430 ~ 450 Hz`
+- Reference tone playback with octave reinforcement
+- Practice library UI grouped by lesson
+- Backing / full / workout track switching
+- Search, favorites, playback speed, and single-track loop
+- Resume playback from the last saved position for each song
+- App-style layout with sidebar, top search bar, main workspace, and bottom transport bar
 
-## 内置曲库
+## Local Library
 
-项目已将本地练习音频复制到 `public/library` 目录中，当前共导入 29 个 `mp3` 文件，并按课程分类整理为：
+The project keeps a local practice-audio directory at:
 
-- `lesson-01`
-- `lesson-02`
-- `lesson-03`
-- `lesson-04`
-- `lesson-05`
+- `public/library`
 
-界面显示仍会保留原始课程名“第一课”到“第五课”。
+Git now preserves the directory itself but does not track the music files inside it. You can keep your own audio files in that folder without committing them.
 
-## 开发运行
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-默认开发地址通常是 `http://localhost:5173`。
+The default local address is usually `http://localhost:5173`.
 
-## 使用建议
-
-- 贝斯接入 `Scarlett Solo` 时，建议使用 `INST` 模式。
-- 在系统或浏览器里允许麦克风权限。
-- 尽量关闭自动增益、降噪、回声消除。
-- 调音时拨单根空弦并维持 1 到 2 秒，检测会更稳定。
-- 练习时优先切换到“伴奏”版本，再根据需要切回“完整版”对照。
-
-## 校验
+## Validate
 
 ```bash
 npm run lint
 npm run build
 ```
+
+## Usage Notes
+
+- Use the `INST` input mode on Scarlett Solo when plugging in the bass.
+- Allow microphone permission in the browser.
+- Disable OS-level auto gain, noise suppression, and echo cancellation when possible.
+- For tuning, pluck a single open string and let the detector lock for 1 to 2 seconds.
+- During practice, start with the backing-track version and switch to the full version for comparison when needed.
