@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, shell } = require('electron')
+﻿const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const path = require('node:path')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
@@ -12,10 +12,13 @@ const createWindow = async () => {
     backgroundColor: '#0d0d0f',
     title: 'Redline Bass Tuner',
     autoHideMenuBar: true,
+    frame: false,
+    titleBarStyle: 'hidden',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   })
 
@@ -31,6 +34,31 @@ const createWindow = async () => {
 
   await mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
 }
+
+const getFocusedWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+
+ipcMain.on('window:minimize', () => {
+  getFocusedWindow()?.minimize()
+})
+
+ipcMain.on('window:maximize', () => {
+  const window = getFocusedWindow()
+
+  if (!window) {
+    return
+  }
+
+  if (window.isMaximized()) {
+    window.unmaximize()
+    return
+  }
+
+  window.maximize()
+})
+
+ipcMain.on('window:close', () => {
+  getFocusedWindow()?.close()
+})
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.redline.bass-tuner')

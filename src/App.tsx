@@ -7,6 +7,8 @@ import {
   CircleAlert,
   Gauge,
   Guitar,
+  Maximize2,
+  Minimize,
   Pause,
   Play,
   Plus,
@@ -22,6 +24,7 @@ import {
   Timer,
   Trash2,
   Volume2,
+  X,
 } from 'lucide-react'
 
 import './App.css'
@@ -62,6 +65,22 @@ const sectionItems: { id: AppSection; label: string }[] = [
   { id: 'practice', label: 'Practice' },
   { id: 'input', label: 'Input' },
 ]
+
+declare global {
+  interface Window {
+    redlineWindow?: {
+      minimize: () => void
+      maximize: () => void
+      close: () => void
+    }
+  }
+}
+
+const windowControls = [
+  { id: 'minimize', label: 'Minimize', icon: Minimize },
+  { id: 'maximize', label: 'Maximize', icon: Maximize2 },
+  { id: 'close', label: 'Close', icon: X },
+] as const
 
 const stopOscillator = (oscillator: OscillatorNode | null | undefined) => {
   if (!oscillator) {
@@ -739,11 +758,41 @@ function App() {
   const showReference = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
   const showLibraryPanel = activeSection === 'overview' || activeSection === 'library'
   const showPracticeLab = activeSection === 'practice'
+  const showWorkspaceSide = showRig || showReference || showLibraryPanel
+
+  const handleWindowControl = (action: (typeof windowControls)[number]['id']) => {
+    window.redlineWindow?.[action]()
+  }
 
   return (
     <div className="app-shell app-window">
       <div className="noise-overlay" />
       <audio ref={audioRef} preload="metadata" src={activeTrack?.filePath} />
+
+      <div className="custom-titlebar">
+        <div className="titlebar-drag-region" />
+        <div className="titlebar-brand">
+          <span className="titlebar-dot" />
+          <strong>Redline Bass Tuner</strong>
+        </div>
+        <div className="titlebar-controls">
+          {windowControls.map((control) => {
+            const Icon = control.icon
+
+            return (
+              <button
+                key={control.id}
+                type="button"
+                className={`window-control window-control-${control.id}`}
+                onClick={() => handleWindowControl(control.id)}
+                aria-label={control.label}
+              >
+                <Icon size={15} />
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       <aside className="app-sidebar">
         <div className="sidebar-brand">
@@ -879,7 +928,7 @@ function App() {
           </section>
           )}
 
-          <div className={`workspace-grid workspace-grid-${activeSection}`}>
+          <div className={`workspace-grid workspace-grid-${activeSection} ${showWorkspaceSide ? '' : 'workspace-grid-single'}`}>
             {showPracticeLab && (
               <section className="panel practice-lab-panel">
                 <div className="section-heading">
@@ -1102,6 +1151,7 @@ function App() {
             </section>
             )}
 
+            {showWorkspaceSide && (
             <aside className="workspace-side">
               {showRig && (
               <section className="panel">
@@ -1298,6 +1348,7 @@ function App() {
               </section>
               )}
             </aside>
+            )}
           </div>
         </div>
 
