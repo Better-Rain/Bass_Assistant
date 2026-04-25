@@ -1,68 +1,102 @@
-# Redline Bass Tuner
+﻿# Redline Bass Tuner
 
-Redline Bass Tuner is a bass practice tool focused on direct-input workflow. The visual style is inspired by the red metal shell and black faceplate of the Focusrite Scarlett Solo.
+Redline Bass Tuner 是一个面向贝斯练习的桌面音乐工具。项目使用 Vite + React + TypeScript 开发，并通过 Electron 提供本地桌面窗口。整体视觉保持红黑色的 Scarlett 风格，重点服务于声卡直连、调音、曲库浏览和伴奏练习流程。
 
-## Features
+## 当前功能
 
-- Real-time bass tuner with note name, target string, target frequency, and cents offset
-- Multiple tuning presets: 4-string standard, Drop D, 5-string standard, and Tenor Bass
-- Audio input selection with active input display
-- Concert pitch calibration with `A4 = 430 ~ 450 Hz`
-- Reference tone playback with octave reinforcement
-- Practice library UI grouped by lesson
-- Backing / full / workout track switching
-- Low-interruption backing / full switching that keeps the current playback time
-- Search, favorites, playback speed, and single-track loop
-- Desktop-player layout with sidebar navigation, top search, section workspaces, and bottom transport bar
-- Real section switching for Overview, Tuner, Library, Practice, and Input
-- Practice tools: A-B loop, metronome, lightweight visualizer, song markers, and per-track notes
-- Electron desktop shell for running the same Vite app as a local desktop window
+### 调音器
 
-## Local Library
+- 实时识别贝斯音高，显示音名、目标弦、目标频率和 cents 偏差。
+- 支持输入设备切换，并显示当前实际监听的输入设备。
+- 支持 `A4 = 430 ~ 450 Hz` 的 Concert A 校准。
+- 支持多种调弦预设：四弦标准、Drop D、五弦标准、Tenor Bass。
+- Input 页面内置参考音播放，用于对照校音。
 
-The project keeps a local practice-audio directory at:
+### 曲库与分类
 
-- `public/library`
+- 本地曲库目录为 `public/library`，用于用户自行管理音频文件。
+- Git 只保留 `public/library/.gitkeep`，不会追踪该目录下的音乐文件。
+- 曲库支持按课时和自定义分类浏览。
+- 用户可以创建自定义分类，并在弹窗中管理歌曲归属。
+- 分类支持右键菜单：播放该类、管理歌曲、删除分类。
+- 删除分类只删除分类本身，不删除歌曲文件。
+- 歌曲可以属于多个分类。
 
-Git now preserves the directory itself but does not track the music files inside it. You can keep your own audio files in that folder without committing them.
+### 播放器
 
-## Run
+- 底部固定播放器，支持上一首、下一首、播放/暂停、进度拖动和倍速切换。
+- 点击歌曲卡片中的播放按钮才会开始播放；浏览分类或歌曲列表不会打断当前播放。
+- 支持伴奏版、完整版、练习版切换。
+- 伴奏版和完整版之间切换时会尽量保持当前播放时间；练习版暂不加入该低中断切换路径。
+- 支持播放队列浮窗：查看队列、点击队列歌曲播放、移除歌曲、清空队列。
+- 支持播放模式：顺序播放、随机顺序、单曲循环、播完停止、列表循环。
+- 切换上一首/下一首会直接开始播放。
+- 不再保存每首歌的历史播放位置；跨歌曲播放默认从开头开始。
+
+### 练习工具
+
+- Practice 页面提供 A-B 循环、节拍器、轻量可视化、歌曲标记和练习笔记。
+- 标记和笔记保存在浏览器或 Electron 的本地存储中。
+
+## 本地曲库
+
+项目使用以下目录作为本地音频库：
+
+```text
+public/library
+```
+
+你可以把自己的 mp3 等音频文件放在该目录下。该目录下的音乐文件不会被 Git 追踪，避免误提交个人曲库或版权音频。
+
+## 开发运行
+
+安装依赖：
 
 ```bash
 npm install
+```
+
+启动 Web 开发服务器：
+
+```bash
 npm run dev
 ```
 
-The default local address is usually `http://localhost:5173`.
+默认地址通常是：
 
-## Desktop App
+```text
+http://localhost:5173
+```
 
-Electron is used as the desktop wrapper because this project is already a Vite + React app and does not need a Rust toolchain.
+## 桌面运行
+
+启动 Electron 桌面窗口：
 
 ```bash
 npm run dev:desktop
 ```
 
-For a production smoke check:
+生产构建和桌面冒烟检查：
 
 ```bash
 npm run build:desktop
 ```
 
-## Validate
+## 验证命令
+
+提交前建议运行：
 
 ```bash
 npm run lint
 npm run build
+npm run build:desktop
 ```
 
-## Usage Notes
+## 使用建议
 
-- Use the `INST` input mode on Scarlett Solo when plugging in the bass.
-- Allow microphone permission in the browser.
-- Disable OS-level auto gain, noise suppression, and echo cancellation when possible.
-- For tuning, pluck a single open string and let the detector lock for 1 to 2 seconds.
-- During practice, start with the backing-track version and switch to the full version for comparison when needed.
-- Backing and full versions switch at the current playback time when both files exist for the song. The workout version is not included in this seamless-switch path yet.
-- In Practice, set A and B while playback is moving, then enable A-B to repeat only that phrase.
-- Markers and notes are saved in browser or Electron local storage for each track.
+- 使用 Scarlett Solo 等声卡时，贝斯建议接入 `INST` 输入。
+- 浏览器或 Electron 首次使用调音器时，需要允许麦克风权限。
+- 如果调音识别不稳定，建议关闭系统层面的自动增益、降噪和回声消除。
+- 调音时尽量只拨响一根空弦，并等待 1 到 2 秒让基频识别稳定。
+- 练习时可以先使用伴奏版，再切换到完整版对照原曲。
+- 使用 A-B 循环时，先在播放过程中设置 A 点和 B 点，再启用循环。
