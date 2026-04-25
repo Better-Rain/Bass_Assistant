@@ -3,20 +3,20 @@ import { PitchDetector } from 'pitchy'
 
 import { clamp, getChromaticTarget, getNearestString, type TuningPreset } from '../lib/music'
 
-type TunerStatus = 'idle' | 'requesting' | 'running' | 'error'
+export type TunerStatus = 'idle' | 'requesting' | 'running' | 'error'
 
-type DeviceOption = {
+export type DeviceOption = {
   deviceId: string
   label: string
   isAlias?: boolean
 }
 
-type ActiveInput = {
+export type ActiveInput = {
   deviceId: string
   label: string
 }
 
-type PitchSnapshot = {
+export type PitchSnapshot = {
   frequency: number | null
   clarity: number
   level: number

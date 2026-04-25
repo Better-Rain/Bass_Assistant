@@ -1,33 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Activity,
-  AudioLines,
-  BarChart3,
-  Bookmark,
-  CircleAlert,
-  Gauge,
-  Guitar,
-  Maximize2,
-  Minimize,
-  Pause,
-  Play,
-  Plus,
-  Radio,
-  RefreshCw,
-  Repeat,
-  Search,
-  SkipBack,
-  SkipForward,
-  SlidersHorizontal,
-  Sparkles,
-  Star,
-  Timer,
-  Trash2,
-  Volume2,
-  X,
-} from 'lucide-react'
 
 import './App.css'
+import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredPlaybackPositions, getStoredString, getStoredStringArray } from './app/storage'
+import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker } from './app/types'
+import { BottomPlayer } from './components/BottomPlayer'
+import { HeroGrid } from './components/HeroGrid'
+import { LibraryPanel } from './components/LibraryPanel'
+import { PracticeLab } from './components/PracticeLab'
+import { QueueSection } from './components/QueueSection'
+import { ReferencePanel } from './components/ReferencePanel'
+import { RigPanel } from './components/RigPanel'
+import { TitleBar } from './components/TitleBar'
+import { TunerPanel } from './components/TunerPanel'
+import { Sidebar } from './components/Sidebar'
+import { Topbar } from './components/Topbar'
 import { useBassTuner } from './hooks/useBassTuner'
 import {
   clamp,
@@ -37,125 +23,11 @@ import {
   tuningPresets,
   type TuningPreset,
 } from './lib/music'
-import {
-  defaultVariantOrder,
-  lessonOptions,
-  librarySongs,
-  variantOptions,
-  type LibrarySong,
-  type TrackVariant,
-} from './lib/tracks'
+import { librarySongs, type TrackVariant } from './lib/tracks'
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
 
-type AppSection = 'overview' | 'tuner' | 'library' | 'practice' | 'input'
-
-type PracticeMarker = {
-  id: string
-  songId: string
-  time: number
-  label: string
-}
-
-const sectionItems: { id: AppSection; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'tuner', label: 'Tuner' },
-  { id: 'library', label: 'Library' },
-  { id: 'practice', label: 'Practice' },
-  { id: 'input', label: 'Input' },
-]
-
-declare global {
-  interface Window {
-    redlineWindow?: {
-      minimize: () => void
-      maximize: () => void
-      close: () => void
-    }
-  }
-}
-
-const windowControls = [
-  { id: 'minimize', label: 'Minimize', icon: Minimize },
-  { id: 'maximize', label: 'Maximize', icon: Maximize2 },
-  { id: 'close', label: 'Close', icon: X },
-] as const
-
-const stopOscillator = (oscillator: OscillatorNode | null | undefined) => {
-  if (!oscillator) {
-    return
-  }
-
-  try {
-    oscillator.stop()
-  } catch {
-    // Ignore repeated stop calls during rapid toggles.
-  }
-}
-
-const getStoredNumber = (key: string, fallback: number) => {
-  const value = Number(window.localStorage.getItem(key))
-  return Number.isFinite(value) ? value : fallback
-}
-
-const getStoredString = (key: string, fallback: string) => window.localStorage.getItem(key) ?? fallback
-
-const getStoredStringArray = (key: string) => {
-  try {
-    const value = window.localStorage.getItem(key)
-    return value ? (JSON.parse(value) as string[]) : []
-  } catch {
-    return []
-  }
-}
-
-const getStoredPlaybackPositions = () => {
-  try {
-    const value = window.localStorage.getItem('bass-record.playbackPositions')
-    return value ? (JSON.parse(value) as Record<string, number>) : {}
-  } catch {
-    return {}
-  }
-}
-
-const getStoredMarkers = () => {
-  try {
-    const value = window.localStorage.getItem('bass-record.markers')
-    return value ? (JSON.parse(value) as PracticeMarker[]) : []
-  } catch {
-    return []
-  }
-}
-
-const getStoredNotes = () => {
-  try {
-    const value = window.localStorage.getItem('bass-record.practiceNotes')
-    return value ? (JSON.parse(value) as Record<string, string>) : {}
-  } catch {
-    return {}
-  }
-}
-
-const formatTime = (seconds: number) => {
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return '0:00'
-  }
-
-  const rounded = Math.floor(seconds)
-  const minutes = Math.floor(rounded / 60)
-  const remainingSeconds = rounded % 60
-  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
-}
-
-const pickTrackVariant = (song: LibrarySong, preferredVariant: TrackVariant) => {
-  const variants = song.variants
-  return (
-    variants[preferredVariant] ??
-    defaultVariantOrder.map((variant) => variants[variant]).find(Boolean) ??
-    null
-  )
-}
 
 function App() {
   const [selectedDeviceId, setSelectedDeviceId] = useState(() =>
@@ -760,692 +632,179 @@ function App() {
   const showPracticeLab = activeSection === 'practice'
   const showWorkspaceSide = showRig || showReference || showLibraryPanel
 
-  const handleWindowControl = (action: (typeof windowControls)[number]['id']) => {
-    window.redlineWindow?.[action]()
-  }
+
 
   return (
     <div className="app-shell app-window">
       <div className="noise-overlay" />
       <audio ref={audioRef} preload="metadata" src={activeTrack?.filePath} />
 
-      <div className="custom-titlebar">
-        <div className="titlebar-drag-region" />
-        <div className="titlebar-brand">
-          <span className="titlebar-dot" />
-          <strong>Redline Bass Tuner</strong>
-        </div>
-        <div className="titlebar-controls">
-          {windowControls.map((control) => {
-            const Icon = control.icon
+      <TitleBar />
 
-            return (
-              <button
-                key={control.id}
-                type="button"
-                className={`window-control window-control-${control.id}`}
-                onClick={() => handleWindowControl(control.id)}
-                aria-label={control.label}
-              >
-                <Icon size={15} />
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <aside className="app-sidebar">
-        <div className="sidebar-brand">
-          <div className="brand-mark">R</div>
-          <div>
-            <strong>Redline Bass</strong>
-            <span>Scarlett practice desk</span>
-          </div>
-        </div>
-
-        <nav className="sidebar-nav">
-          {sectionItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`sidebar-link ${activeSection === item.id ? 'sidebar-link-active' : ''}`}
-              onClick={() => setActiveSection(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-section">
-          <p className="panel-label">Quick Stats</p>
-          {quickStats.map((stat) => (
-            <article key={stat.label} className="sidebar-stat">
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-              <small>{stat.detail}</small>
-            </article>
-          ))}
-        </div>
-      </aside>
+      <Sidebar
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        quickStats={quickStats}
+      />
 
       <section className="app-main">
-        <header className="topbar">
-          <div className="topbar-title">
-            <span>Workspace</span>
-            <strong>{sectionTitle}</strong>
-          </div>
-
-          <label className="topbar-search">
-            <Search size={18} />
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search tracks, lessons, levels"
-            />
-          </label>
-
-          <div className="topbar-actions">
-            <div className={`status-chip status-${status}`}>
-              <Radio size={16} />
-              <span>{status === 'running' ? 'Input armed' : status === 'requesting' ? 'Waiting permission' : status === 'error' ? 'Input error' : 'Standby'}</span>
-            </div>
-            <div className={`status-chip ${perfectlyTuned ? 'status-tuned' : 'status-live'}`}>
-              <Gauge size={16} />
-              <span>{perfectlyTuned ? 'Perfectly tuned' : 'Tracking pitch'}</span>
-            </div>
-          </div>
-        </header>
+        <Topbar
+          sectionTitle={sectionTitle}
+          searchQuery={searchQuery}
+          status={status}
+          perfectlyTuned={perfectlyTuned}
+          onSearchChange={setSearchQuery}
+        />
 
         <div className="content-scroll">
           {showOverview && (
-          <section className="hero-grid">
-            <article className="hero-card hero-card-primary">
-              <p className="panel-label">Live tuning</p>
-              <strong>{noteParts.pitchClass}{noteParts.octave}</strong>
-              <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'Waiting for note'}</span>
-              <small>{perfectlyTuned ? 'Locked at center' : currentTip}</small>
-            </article>
-            <article className="hero-card">
-              <p className="panel-label">Current target</p>
-              <strong>{targetString}</strong>
-              <span>{formatFrequency(targetFrequency)}</span>
-              <small>{Math.abs(tuningCents).toFixed(1)} cents {tuningCents > 0 ? 'sharp' : 'flat'}</small>
-            </article>
-            <article className="hero-card">
-              <p className="panel-label">Practice library</p>
-              <strong>{librarySongs.length}</strong>
-              <span>Total tracks</span>
-              <small>{backingReadyCount} with backing versions</small>
-            </article>
-            <article className="hero-card">
-              <p className="panel-label">Input path</p>
-              <strong>{activeInput?.label ?? 'No active input'}</strong>
-              <span>{devices.length} devices detected</span>
-              <small>{deviceHint}</small>
-            </article>
-          </section>
+            <HeroGrid
+              noteLabel={`${noteParts.pitchClass}${noteParts.octave}`}
+              frequencyLabel={signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'Waiting for note'}
+              tuningTip={currentTip}
+              perfectlyTuned={perfectlyTuned}
+              targetString={targetString}
+              targetFrequencyLabel={formatFrequency(targetFrequency)}
+              centsLabel={`${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`}
+              trackCount={librarySongs.length}
+              backingReadyCount={backingReadyCount}
+              activeInput={activeInput}
+              deviceCount={devices.length}
+              deviceHint={deviceHint}
+            />
           )}
 
           {showQueue && (
-          <section className="content-section">
-            <div className="section-heading">
-              <div>
-                <p className="panel-label">Continue practice</p>
-                <h2>Queue</h2>
-              </div>
-              <div className="toggle-row">
-                <button
-                  type="button"
-                  className={`toggle-chip ${favoritesOnly ? 'toggle-chip-active' : ''}`}
-                  onClick={() => setFavoritesOnly((current) => !current)}
-                >
-                  Favorites only
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-chip ${onlyBacking ? 'toggle-chip-active' : ''}`}
-                  onClick={() => setOnlyBacking((current) => !current)}
-                >
-                  Backing only
-                </button>
-              </div>
-            </div>
-
-            <div className="spotlight-row">
-              {spotlightSongs.map((song) => (
-                <button
-                  key={song.id}
-                  type="button"
-                  className={`spotlight-card ${song.id === activeSong?.id ? 'spotlight-card-active' : ''}`}
-                  onClick={() => handleSongSelect(song.id, true)}
-                >
-                  <span>{song.lessonName}</span>
-                  <strong>{song.title}</strong>
-                  <small>{song.level ?? 'Open practice'}</small>
-                </button>
-              ))}
-            </div>
-          </section>
+            <QueueSection
+              favoritesOnly={favoritesOnly}
+              onlyBacking={onlyBacking}
+              spotlightSongs={spotlightSongs}
+              activeSong={activeSong}
+              onToggleFavoritesOnly={() => setFavoritesOnly((current) => !current)}
+              onToggleOnlyBacking={() => setOnlyBacking((current) => !current)}
+              onSongSelect={handleSongSelect}
+            />
           )}
 
           <div className={`workspace-grid workspace-grid-${activeSection} ${showWorkspaceSide ? '' : 'workspace-grid-single'}`}>
             {showPracticeLab && (
-              <section className="panel practice-lab-panel">
-                <div className="section-heading">
-                  <div>
-                    <p className="panel-label">Practice Lab</p>
-                    <h2>A-B Loop, Click & Notes</h2>
-                  </div>
-                  <div className="panel-meta">
-                    <span>{activeSong?.title ?? 'No track selected'}</span>
-                    <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
-                  </div>
-                </div>
-
-                <div className="practice-grid">
-                  <article className="practice-card analysis-card">
-                    <div className="practice-card-head">
-                      <BarChart3 size={18} />
-                      <strong>Signal / Groove View</strong>
-                    </div>
-                    <div className="visualizer-bars" aria-hidden="true">
-                      {analysisBars.map((height, index) => (
-                        <i key={index} style={{ height: `${height}%` }} />
-                      ))}
-                    </div>
-                    <p>Use tuner clarity and playback position as a lightweight practice visualizer.</p>
-                  </article>
-
-                  <article className="practice-card">
-                    <div className="practice-card-head">
-                      <Repeat size={18} />
-                      <strong>A-B Loop</strong>
-                    </div>
-                    <div className="ab-loop-grid">
-                      <button type="button" className="toggle-chip" onClick={() => setLoopPoint('start')}>
-                        Set A {loopStart !== null ? formatTime(loopStart) : '--'}
-                      </button>
-                      <button type="button" className="toggle-chip" onClick={() => setLoopPoint('end')}>
-                        Set B {loopEnd !== null ? formatTime(loopEnd) : '--'}
-                      </button>
-                      <button
-                        type="button"
-                        className={`toggle-chip ${abLoopEnabled ? 'toggle-chip-active' : ''}`}
-                        onClick={() => setAbLoopEnabled((current) => !current)}
-                        disabled={loopStart === null || loopEnd === null || loopEnd <= loopStart}
-                      >
-                        {abLoopEnabled ? 'A-B on' : 'A-B off'}
-                      </button>
-                    </div>
-                    <small>Loop a hard phrase without changing single-track repeat.</small>
-                  </article>
-
-                  <article className="practice-card">
-                    <div className="practice-card-head">
-                      <Timer size={18} />
-                      <strong>Metronome</strong>
-                    </div>
-                    <div className="tempo-row">
-                      <input
-                        type="range"
-                        min="40"
-                        max="220"
-                        value={tempo}
-                        onChange={(event) => setTempo(Number(event.target.value))}
-                      />
-                      <strong>{tempo} BPM</strong>
-                    </div>
-                    <button
-                      type="button"
-                      className={`toggle-chip ${metronomeEnabled ? 'toggle-chip-active' : ''}`}
-                      onClick={() => setMetronomeEnabled((current) => !current)}
-                    >
-                      {metronomeEnabled ? 'Stop click' : 'Start click'}
-                    </button>
-                  </article>
-
-                  <article className="practice-card marker-card">
-                    <div className="practice-card-head">
-                      <Bookmark size={18} />
-                      <strong>Song Markers</strong>
-                    </div>
-                    <button type="button" className="icon-button" onClick={addMarker} disabled={!activeSong}>
-                      <Plus size={16} />
-                      <span>Add marker</span>
-                    </button>
-                    <div className="marker-list">
-                      {activeSongMarkers.length > 0 ? (
-                        activeSongMarkers.map((marker) => (
-                          <div key={marker.id} className="marker-row">
-                            <button type="button" onClick={() => jumpToTime(marker.time)}>
-                              <strong>{marker.label}</strong>
-                              <span>{formatTime(marker.time)}</span>
-                            </button>
-                            <button type="button" className="ghost-button" onClick={() => removeMarker(marker.id)}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        ))
-                      ) : (
-                        <small>No markers yet. Drop one before a difficult fill or shift.</small>
-                      )}
-                    </div>
-                  </article>
-                </div>
-
-                <label className="notes-field">
-                  <span>Practice notes for this track</span>
-                  <textarea
-                    value={activePracticeNote}
-                    onChange={(event) => updatePracticeNote(event.target.value)}
-                    placeholder="Write fingering ideas, tempo goals, tone notes, or bars to revisit."
-                    disabled={!activeSong}
-                  />
-                </label>
-              </section>
+              <PracticeLab
+                activeSong={activeSong}
+                currentTime={currentTime}
+                duration={duration}
+                analysisBars={analysisBars}
+                loopStart={loopStart}
+                loopEnd={loopEnd}
+                abLoopEnabled={abLoopEnabled}
+                tempo={tempo}
+                metronomeEnabled={metronomeEnabled}
+                activeSongMarkers={activeSongMarkers}
+                activePracticeNote={activePracticeNote}
+                onSetLoopPoint={setLoopPoint}
+                onToggleAbLoop={() => setAbLoopEnabled((current) => !current)}
+                onTempoChange={setTempo}
+                onToggleMetronome={() => setMetronomeEnabled((current) => !current)}
+                onAddMarker={addMarker}
+                onRemoveMarker={removeMarker}
+                onJumpToTime={jumpToTime}
+                onUpdatePracticeNote={updatePracticeNote}
+              />
             )}
 
             {showTuner && (
-            <section className="panel tuner-panel">
-              <div className="section-heading">
-                <div>
-                  <p className="panel-label">Tuner deck</p>
-                  <h2>Main Tuner</h2>
-                </div>
-                <div className="panel-meta">
-                  <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'No pitch yet'}</span>
-                  <span>{signalPresent ? `Target ${formatFrequency(targetFrequency)}` : 'Awaiting note'}</span>
-                </div>
-              </div>
-
-              <div className={`tuner-stage ${perfectlyTuned ? 'tuner-stage-tuned' : ''}`}>
-                {perfectlyTuned && (
-                  <div className="tune-badge">
-                    <Sparkles size={16} />
-                    <span>In tune</span>
-                  </div>
-                )}
-
-                <div className="note-lockup">
-                  <span className="note-name">{noteParts.pitchClass}</span>
-                  <span className="note-octave">{noteParts.octave}</span>
-                  <p className="note-subtitle">
-                    Target <strong>{targetString}</strong> · {formatFrequency(targetFrequency)}
-                  </p>
-                </div>
-
-                <div className="meter-shell">
-                  <div className="meter-scale">
-                    {[-50, -30, -10, 0, 10, 30, 50].map((tick) => (
-                      <span
-                        key={tick}
-                        className={`meter-tick ${tick === 0 ? 'meter-tick-center' : ''}`}
-                        style={{ left: `${tick + 50}%` }}
-                      >
-                        <i />
-                        <small>{tick}</small>
-                      </span>
-                    ))}
-                    <div className={`tolerance-zone ${inTune ? 'tolerance-zone-hot' : ''}`} />
-                    <div className="needle" style={{ left: needleOffset }} />
-                  </div>
-
-                  <div className="meter-readout">
-                    <span className={tuningCents > 0 ? 'sharp' : 'flat'}>
-                      {signalPresent
-                        ? `${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`
-                        : 'Waiting for direct signal'}
-                    </span>
-                    <strong>{perfectlyTuned ? 'Perfect' : inTune && signalPresent ? 'Close enough' : 'Adjust slowly'}</strong>
-                  </div>
-                </div>
-              </div>
-
-              <div className="string-grid">
-                {tuning.strings.map((item) => {
-                  const active = snapshot.stringMatch?.note === item.note
-                  const itemCents = active ? Math.abs(snapshot.stringMatch?.cents ?? 999) : null
-                  const itemTuned = itemCents !== null && itemCents <= 5
-
-                  return (
-                    <button
-                      key={item.note}
-                      type="button"
-                      className={`string-card ${active ? 'string-card-active' : ''} ${itemTuned ? 'string-card-tuned' : ''}`}
-                      onClick={() => {
-                        setReferenceStringNote(item.note)
-                        setReferenceEnabled(true)
-                      }}
-                    >
-                      <span>{item.label}</span>
-                      <strong>{item.note}</strong>
-                      <small>{formatFrequency(midiToFrequency(item.midi, concertA))}</small>
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="insight-strip">
-                <article className="mini-stat">
-                  <AudioLines size={18} />
-                  <div>
-                    <span>Signal</span>
-                    <strong>{signalLevel}%</strong>
-                  </div>
-                </article>
-                <article className="mini-stat">
-                  <Activity size={18} />
-                  <div>
-                    <span>Clarity</span>
-                    <strong>{clarityPercent}%</strong>
-                  </div>
-                </article>
-                <article className="mini-stat">
-                  <Guitar size={18} />
-                  <div>
-                    <span>Preset</span>
-                    <strong>{tuning.subtitle}</strong>
-                  </div>
-                </article>
-              </div>
-            </section>
+              <TunerPanel
+                snapshot={snapshot}
+                tuning={tuning}
+                concertA={concertA}
+                signalPresent={signalPresent}
+                targetString={targetString}
+                targetFrequency={targetFrequency}
+                tuningCents={tuningCents}
+                needleOffset={needleOffset}
+                perfectlyTuned={perfectlyTuned}
+                inTune={inTune}
+                signalLevel={signalLevel}
+                clarityPercent={clarityPercent}
+                onReferenceString={(note) => {
+                  setReferenceStringNote(note)
+                  setReferenceEnabled(true)
+                }}
+              />
             )}
 
             {showWorkspaceSide && (
             <aside className="workspace-side">
               {showRig && (
-              <section className="panel">
-                <div className="section-heading">
-                  <div>
-                    <p className="panel-label">Controls</p>
-                    <h2>Rig</h2>
-                  </div>
-                  <button type="button" className="icon-button" onClick={() => void restart()}>
-                    <RefreshCw size={16} />
-                    <span>Reconnect</span>
-                  </button>
-                </div>
-
-                <label className="field">
-                  <span>Audio input</span>
-                  <select
-                    value={visibleDeviceId}
-                    onChange={(event) => setSelectedDeviceId(event.target.value)}
-                  >
-                    <option value="">Default input</option>
-                    {devices.map((device) => (
-                      <option key={device.deviceId} value={device.deviceId}>
-                        {device.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field">
-                  <span>Concert A</span>
-                  <div className="slider-row">
-                    <input
-                      type="range"
-                      min="430"
-                      max="450"
-                      step="1"
-                      value={concertA}
-                      onChange={(event) => setConcertA(Number(event.target.value))}
-                    />
-                    <strong>{concertA} Hz</strong>
-                  </div>
-                </label>
-
-                <div className="preset-grid">
-                  {tuningPresets.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`preset-card ${item.id === tuning.id ? 'preset-card-active' : ''}`}
-                      onClick={() => setSelectedTuningId(item.id)}
-                    >
-                      <strong>{item.name}</strong>
-                      <span>{item.subtitle}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className={`callout ${error ? 'error-callout' : ''}`}>
-                  {error ? <CircleAlert size={18} /> : <SlidersHorizontal size={18} />}
-                  <p>{deviceHint}</p>
-                </div>
-              </section>
+                <RigPanel
+                  visibleDeviceId={visibleDeviceId}
+                  devices={devices}
+                  concertA={concertA}
+                  tuning={tuning}
+                  error={error}
+                  deviceHint={deviceHint}
+                  onDeviceChange={setSelectedDeviceId}
+                  onConcertAChange={setConcertA}
+                  onTuningChange={setSelectedTuningId}
+                  onRestart={() => void restart()}
+                />
               )}
 
               {showReference && (
-              <section className="panel">
-                <div className="section-heading">
-                  <div>
-                    <p className="panel-label">Reference</p>
-                    <h2>Reference Tone</h2>
-                  </div>
-                  <button
-                    type="button"
-                    className={`icon-button ${referenceEnabled ? 'icon-button-live' : ''}`}
-                    onClick={() => setReferenceEnabled((current) => !current)}
-                  >
-                    <Volume2 size={16} />
-                    <span>{referenceEnabled ? 'Stop' : 'Play'}</span>
-                  </button>
-                </div>
-
-                <div className="reference-grid">
-                  {tuning.strings.map((item) => (
-                    <button
-                      key={item.note}
-                      type="button"
-                      className={`reference-pill ${item.note === activeReferenceNote ? 'reference-pill-active' : ''}`}
-                      onClick={() => {
-                        setReferenceStringNote(item.note)
-                        setReferenceEnabled(true)
-                      }}
-                    >
-                      {item.note}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="tip-box">
-                  <p>{currentTip}</p>
-                </div>
-
-                <div className="history-row">
-                  <span>Recent locks</span>
-                  <div>
-                    {history.length > 0 ? (
-                      history.map((item, index) => <b key={`${item}-${index}`}>{item}</b>)
-                    ) : (
-                      <b>--</b>
-                    )}
-                  </div>
-                </div>
-              </section>
+                <ReferencePanel
+                  tuning={tuning}
+                  activeReferenceNote={activeReferenceNote}
+                  referenceEnabled={referenceEnabled}
+                  currentTip={currentTip}
+                  history={history}
+                  onToggleReference={() => setReferenceEnabled((current) => !current)}
+                  onSelectReferenceNote={(note) => {
+                    setReferenceStringNote(note)
+                    setReferenceEnabled(true)
+                  }}
+                />
               )}
 
               {showLibraryPanel && (
-              <section className="panel library-panel app-library-panel">
-                <div className="section-heading">
-                  <div>
-                    <p className="panel-label">Library</p>
-                    <h2>Tracks</h2>
-                  </div>
-                  <div className="filter-group">
-                    <button
-                      type="button"
-                      className={`filter-chip ${selectedLessonId === 'all' ? 'filter-chip-active' : ''}`}
-                      onClick={() => setSelectedLessonId('all')}
-                    >
-                      All
-                    </button>
-                    {lessonOptions.map((lesson) => (
-                      <button
-                        key={lesson.id}
-                        type="button"
-                        className={`filter-chip ${selectedLessonId === lesson.id ? 'filter-chip-active' : ''}`}
-                        onClick={() => setSelectedLessonId(lesson.id)}
-                      >
-                        {lesson.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="song-list compact-song-list">
-                  {queueSongs.length > 0 ? (
-                    queueSongs.map((song) => {
-                      const favorite = favoriteSongIdSet.has(song.id)
-
-                      return (
-                        <article
-                          key={song.id}
-                          className={`song-card ${song.id === activeSong?.id ? 'song-card-active' : ''}`}
-                        >
-                          <button
-                            type="button"
-                            className="song-card-main"
-                            onClick={() => handleSongSelect(song.id, true)}
-                          >
-                            <div className="song-card-top">
-                              <div>
-                                <strong>{song.title}</strong>
-                                <span>{song.lessonName}</span>
-                              </div>
-                              <span className="song-level">{song.level ?? 'Practice'}</span>
-                            </div>
-                            <div className="song-variants">
-                              {variantOptions
-                                .filter((variant) => song.availableVariants.includes(variant.id))
-                                .map((variant) => (
-                                  <span key={`${song.id}-${variant.id}`} className="variant-pill variant-pill-live">
-                                    {variant.label}
-                                  </span>
-                                ))}
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            className={`favorite-button ${favorite ? 'favorite-button-active' : ''}`}
-                            onClick={() => toggleFavorite(song.id)}
-                            aria-label={favorite ? 'Unfavorite track' : 'Favorite track'}
-                          >
-                            <Star size={16} fill={favorite ? 'currentColor' : 'none'} />
-                          </button>
-                        </article>
-                      )
-                    })
-                  ) : (
-                    <div className="empty-state">
-                      <p>No tracks match the current filter.</p>
-                      <small>Try clearing search or turning off favorites-only mode.</small>
-                    </div>
-                  )}
-                </div>
-              </section>
+                <LibraryPanel
+                  selectedLessonId={selectedLessonId}
+                  queueSongs={queueSongs}
+                  activeSong={activeSong}
+                  favoriteSongIdSet={favoriteSongIdSet}
+                  onLessonSelect={setSelectedLessonId}
+                  onSongSelect={handleSongSelect}
+                  onToggleFavorite={toggleFavorite}
+                />
               )}
             </aside>
             )}
           </div>
         </div>
 
-        <footer className="bottom-player">
-          <div className="player-now">
-            <div className="player-avatar">{activeSong?.lessonName ?? 'Bass'}</div>
-            <div>
-              <strong>{activeSong?.title ?? 'No track selected'}</strong>
-              <span>
-                {activeTrack ? `${activeTrack.label} - ${activeSong?.lessonName ?? ''}` : 'Select a practice track'}
-              </span>
-            </div>
-          </div>
+        <BottomPlayer
+          activeSong={activeSong}
+          activeTrack={activeTrack}
+          currentTime={currentTime}
+          duration={duration}
+          isPlaying={isPlaying}
+          preferredVariant={preferredVariant}
+          playbackRate={playbackRate}
+          loopEnabled={loopEnabled}
+          onJumpSong={jumpSong}
+          onTogglePlayback={() => void togglePlayback()}
+          onSeek={(nextTime) => {
+            const audio = audioRef.current
 
-          <div className="player-center">
-            <div className="transport-row">
-              <button type="button" className="transport-button" onClick={() => jumpSong(-1)}>
-                <SkipBack size={18} />
-              </button>
-              <button
-                type="button"
-                className="transport-button transport-button-primary"
-                onClick={() => void togglePlayback()}
-              >
-                {isPlaying ? <Pause size={22} /> : <Play size={22} />}
-              </button>
-              <button type="button" className="transport-button" onClick={() => jumpSong(1)}>
-                <SkipForward size={18} />
-              </button>
-            </div>
+            if (!audio) {
+              return
+            }
 
-            <div className="progress-block">
-              <input
-                type="range"
-                min="0"
-                max={duration || 0}
-                step="0.1"
-                value={Math.min(currentTime, duration || 0)}
-                onChange={(event) => {
-                  const audio = audioRef.current
-                  const nextTime = Number(event.target.value)
-
-                  if (!audio) {
-                    return
-                  }
-
-                  audio.currentTime = nextTime
-                  setCurrentTime(nextTime)
-                }}
-              />
-              <div className="time-row">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="player-right">
-            <div className="variant-row">
-              {activeSong
-                ? variantOptions
-                    .filter((variant) => activeSong.variants[variant.id])
-                    .map((variant) => (
-                      <button
-                        key={`${activeSong.id}-${variant.id}`}
-                        type="button"
-                        className={`variant-switch ${preferredVariant === variant.id ? 'variant-switch-active' : ''}`}
-                        onClick={() => handleVariantSelect(variant.id)}
-                      >
-                        {variant.label}
-                      </button>
-                    ))
-                : null}
-            </div>
-
-            <div className="rate-row">
-              {[0.75, 1, 1.25, 1.5].map((rate) => (
-                <button
-                  key={rate}
-                  type="button"
-                  className={`rate-chip ${playbackRate === rate ? 'rate-chip-active' : ''}`}
-                  onClick={() => setPlaybackRate(rate)}
-                >
-                  {rate}x
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`rate-chip ${loopEnabled ? 'rate-chip-active' : ''}`}
-                onClick={() => setLoopEnabled((current) => !current)}
-              >
-                <Repeat size={14} />
-                <span>Loop</span>
-              </button>
-            </div>
-          </div>
-        </footer>
+            audio.currentTime = nextTime
+            setCurrentTime(nextTime)
+          }}
+          onVariantSelect={handleVariantSelect}
+          onPlaybackRateChange={setPlaybackRate}
+          onToggleLoop={() => setLoopEnabled((current) => !current)}
+        />
       </section>
     </div>
   )
