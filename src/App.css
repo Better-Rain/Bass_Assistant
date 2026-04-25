@@ -390,8 +390,9 @@
 }
 
 .workspace-grid-tuner {
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.48fr) minmax(320px, 0.8fr);
+  gap: 18px;
+  align-items: start;
 }
 
 .workspace-grid-library,
@@ -429,6 +430,7 @@
 }
 
 .workspace-grid-tuner .workspace-side {
+  align-content: start;
   gap: 12px;
 }
 

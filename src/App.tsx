@@ -619,7 +619,7 @@ function App() {
 
   const showTuner = activeSection === 'tuner'
   const showRig = activeSection === 'tuner' || activeSection === 'input'
-  const showReference = activeSection === 'tuner' || activeSection === 'input'
+  const showReference = activeSection === 'input'
   const showLibraryPanel = activeSection === 'library'
   const showPracticeLab = activeSection === 'practice'
   const showWorkspaceSide = showRig || showReference || showLibraryPanel
