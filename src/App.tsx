@@ -75,6 +75,7 @@ function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const autoPlayNextTrackRef = useRef(false)
+  const pendingTrackAutoplayRef = useRef(false)
   const seamlessVariantSwitchRef = useRef<{
     songId: string
     variant: TrackVariant
@@ -440,6 +441,13 @@ function App() {
 
       setDuration(audio.duration || 0)
       setCurrentTime(audio.currentTime || 0)
+
+      if (pendingTrackAutoplayRef.current) {
+        pendingTrackAutoplayRef.current = false
+        void audio.play().catch(() => {
+          setIsPlaying(false)
+        })
+      }
     }
 
     const onPlay = () => setIsPlaying(true)
@@ -501,6 +509,7 @@ function App() {
 
     if (!activeTrack) {
       seamlessVariantSwitchRef.current = null
+      pendingTrackAutoplayRef.current = false
       audio.pause()
       audio.load()
       return
@@ -514,13 +523,8 @@ function App() {
           pendingSwitch.variant === activeTrack.variant,
       )
 
+    pendingTrackAutoplayRef.current = !shouldDeferVariantPlay && (autoPlayNextTrackRef.current || isPlaying)
     audio.load()
-
-    if (!shouldDeferVariantPlay && (autoPlayNextTrackRef.current || isPlaying)) {
-      void audio.play().catch(() => {
-        setIsPlaying(false)
-      })
-    }
 
     if (!shouldDeferVariantPlay) {
       autoPlayNextTrackRef.current = false
