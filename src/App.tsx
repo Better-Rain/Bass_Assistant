@@ -76,6 +76,7 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const autoPlayNextTrackRef = useRef(false)
   const pendingTrackAutoplayRef = useRef(false)
+  const isPlayingRef = useRef(false)
   const seamlessVariantSwitchRef = useRef<{
     songId: string
     variant: TrackVariant
@@ -226,6 +227,10 @@ function App() {
     queueSongsRef.current = queueSongs
     playbackModeRef.current = playbackMode
   }, [activeSong, playbackMode, queueSongs])
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
 
   const getNextQueueSongFromRefs = useCallback((direction: -1 | 1, manual = true) => {
     const currentQueueSongs = queueSongsRef.current
@@ -574,13 +579,13 @@ function App() {
           pendingSwitch.variant === activeTrack.variant,
       )
 
-    pendingTrackAutoplayRef.current = !shouldDeferVariantPlay && (autoPlayNextTrackRef.current || isPlaying)
+    pendingTrackAutoplayRef.current = !shouldDeferVariantPlay && (autoPlayNextTrackRef.current || isPlayingRef.current)
     audio.load()
 
     if (!shouldDeferVariantPlay) {
       autoPlayNextTrackRef.current = false
     }
-  }, [activeSong?.id, activeTrack, isPlaying])
+  }, [activeSong?.id, activeTrack])
 
   useEffect(() => {
     if (!referenceEnabled) {
@@ -1113,6 +1118,7 @@ function App() {
         }}
         queueOpen={queueOpen}
         onToggleQueue={() => setQueueOpen((current) => !current)}
+        onCloseQueue={() => setQueueOpen(false)}
       />
     </div>
   )

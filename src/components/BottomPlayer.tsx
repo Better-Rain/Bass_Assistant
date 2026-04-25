@@ -1,4 +1,5 @@
 import { ListMusic, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Trash2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 import { formatTime, type PlaybackMode } from '../app/types'
 import { variantOptions, type LibrarySong, type SongTrack, type TrackVariant } from '../lib/tracks'
@@ -24,6 +25,7 @@ type BottomPlayerProps = {
   onRemoveQueueSong: (songId: string) => void
   onClearQueue: () => void
   onToggleQueue: () => void
+  onCloseQueue: () => void
 }
 
 const playbackModes: { id: PlaybackMode; label: string; shortLabel: string }[] = [
@@ -55,9 +57,27 @@ export function BottomPlayer({
   onRemoveQueueSong,
   onClearQueue,
   onToggleQueue,
+  onCloseQueue,
 }: BottomPlayerProps) {
+  const queueControlRef = useRef<HTMLDivElement | null>(null)
   const playbackRates = [0.75, 1, 1.25, 1.5]
   const activePlaybackMode = playbackModes.find((mode) => mode.id === playbackMode) ?? playbackModes[0]
+
+  useEffect(() => {
+    if (!queueOpen) {
+      return
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!queueControlRef.current?.contains(event.target as Node)) {
+        onCloseQueue()
+      }
+    }
+
+    window.addEventListener('pointerdown', onPointerDown)
+
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [onCloseQueue, queueOpen])
 
   const cyclePlaybackRate = () => {
     const currentIndex = playbackRates.indexOf(playbackRate)
@@ -131,7 +151,7 @@ export function BottomPlayer({
         </div>
 
         <div className="rate-row">
-          <div className="queue-control">
+          <div className="queue-control" ref={queueControlRef}>
             <button type="button" className="rate-chip" onClick={onToggleQueue}>
               <ListMusic size={14} />
               <span>Queue {queueSongs.length}</span>
