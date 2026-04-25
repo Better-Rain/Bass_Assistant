@@ -1,7 +1,7 @@
 .app-shell {
   position: relative;
   height: 100vh;
-  padding: 48px 22px 104px;
+  padding: 48px 22px 120px;
   overflow: hidden;
 }
 
@@ -89,8 +89,8 @@
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 20px;
-  padding: 20px 16px;
+  gap: 12px;
+  padding: 18px 14px;
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(25, 25, 27, 0.96), rgba(14, 14, 15, 0.96)),
@@ -105,6 +105,17 @@
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.sidebar-brand > div:last-child {
+  min-width: 0;
+}
+
+.sidebar-brand strong,
+.sidebar-brand span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-mark {
@@ -138,8 +149,8 @@
 
 .sidebar-link {
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   color: var(--text-soft);
@@ -155,15 +166,21 @@
 .sidebar-stat {
   display: grid;
   gap: 4px;
-  padding: 14px;
-  border-radius: 18px;
+  padding: 11px 12px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-stat strong {
   color: var(--text-strong);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-stat small {
+  line-height: 1.25;
 }
 
 .app-main {
@@ -366,7 +383,7 @@
 
 .workspace-grid-library,
 .workspace-grid-input {
-  grid-template-columns: minmax(0, 0.95fr) minmax(520px, 1.25fr);
+  grid-template-columns: 1fr;
 }
 
 .workspace-grid-practice {
@@ -939,6 +956,15 @@
 
 .app-library-panel .section-heading {
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.workspace-grid-library .app-library-panel {
+  width: 100%;
+}
+
+.workspace-grid-library .workspace-side {
+  width: 100%;
 }
 
 .library-toolbar {
@@ -976,6 +1002,11 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.app-library-panel .filter-group {
+  flex: 1;
+  min-width: 320px;
 }
 
 .filter-chip,
@@ -1027,7 +1058,7 @@
 }
 
 .app-library-panel .song-list {
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
 .song-card {

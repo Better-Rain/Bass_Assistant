@@ -35,6 +35,8 @@ export function TunerPanel({
   onReferenceString,
 }: TunerPanelProps) {
   const noteParts = formatNoteName(snapshot.note ?? tuning.strings[0].note)
+  const displayNote = signalPresent ? noteParts.pitchClass : '--'
+  const displayOctave = signalPresent ? noteParts.octave : ''
 
   return (
     <section className="panel tuner-panel">
@@ -58,8 +60,8 @@ export function TunerPanel({
         )}
 
         <div className="note-lockup">
-          <span className="note-name">{noteParts.pitchClass}</span>
-          <span className="note-octave">{noteParts.octave}</span>
+          <span className="note-name">{displayNote}</span>
+          {displayOctave ? <span className="note-octave">{displayOctave}</span> : null}
           <p className="note-subtitle">
             Target <strong>{targetString}</strong> - {formatFrequency(targetFrequency)}
           </p>

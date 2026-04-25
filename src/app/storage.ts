@@ -5,6 +5,11 @@ export const getStoredNumber = (key: string, fallback: number) => {
   return Number.isFinite(value) ? value : fallback
 }
 
+export const getStoredNumberInRange = (key: string, fallback: number, min: number, max: number) => {
+  const value = getStoredNumber(key, fallback)
+  return value >= min && value <= max ? value : fallback
+}
+
 export const getStoredString = (key: string, fallback: string) =>
   window.localStorage.getItem(key) ?? fallback
 

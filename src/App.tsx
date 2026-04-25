@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import './App.css'
-import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredPlaybackPositions, getStoredString, getStoredStringArray } from './app/storage'
+import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredString, getStoredStringArray } from './app/storage'
 import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
 import { HeroGrid } from './components/HeroGrid'
@@ -37,7 +37,9 @@ function App() {
   const [selectedTuningId, setSelectedTuningId] = useState(() =>
     getStoredString('bass-record.tuning', DEFAULT_TUNING),
   )
-  const [concertA, setConcertA] = useState(() => getStoredNumber('bass-record.a4', DEFAULT_A4))
+  const [concertA, setConcertA] = useState(() =>
+    getStoredNumberInRange('bass-record.a4', DEFAULT_A4, 430, 450),
+  )
   const [referenceStringNote, setReferenceStringNote] = useState('E1')
   const [referenceEnabled, setReferenceEnabled] = useState(false)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(librarySongs[0]?.id ?? null)
@@ -625,7 +627,7 @@ function App() {
 
   const showOverview = activeSection === 'overview'
   const showTuner = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'practice'
-  const showQueue = activeSection === 'overview' || activeSection === 'library'
+  const showQueue = activeSection === 'overview'
   const showRig = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
   const showReference = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
   const showLibraryPanel = activeSection === 'overview' || activeSection === 'library'
