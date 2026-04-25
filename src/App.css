@@ -268,6 +268,8 @@
 
 .content-scroll-library {
   height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   overflow: hidden;
 }
 
@@ -400,6 +402,8 @@
 .workspace-grid-library {
   height: 100%;
   min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   overflow: hidden;
 }
 
@@ -417,7 +421,9 @@
 }
 
 .workspace-grid-library .workspace-side {
+  height: 100%;
   align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
