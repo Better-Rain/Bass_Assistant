@@ -1,5 +1,5 @@
 import { Check, Plus, Settings2, Star, Trash2, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type MouseEvent } from 'react'
 
 import type { SongCategoryMap, UserCategory } from '../app/types'
 import { lessonOptions, variantOptions, type LibrarySong } from '../lib/tracks'
@@ -11,6 +11,8 @@ type LibraryPanelProps = {
   activeSong: LibrarySong | null
   favoriteSongIdSet: Set<string>
   userCategories: UserCategory[]
+  hiddenCategoryIds: string[]
+  managedCategoryIds: string[]
   songCategories: SongCategoryMap
   editingCategoryId: string | null
   onFilterSelect: (filterId: string) => void
@@ -30,6 +32,8 @@ export function LibraryPanel({
   activeSong,
   favoriteSongIdSet,
   userCategories,
+  hiddenCategoryIds,
+  managedCategoryIds,
   songCategories,
   editingCategoryId,
   onFilterSelect,
@@ -44,8 +48,28 @@ export function LibraryPanel({
   const [creatingCategory, setCreatingCategory] = useState(false)
   const [categoryName, setCategoryName] = useState('')
   const [draftSongIds, setDraftSongIds] = useState<string[] | null>(null)
+  const [menuCategoryId, setMenuCategoryId] = useState<string | null>(null)
+  const createRef = useRef<HTMLLabelElement | null>(null)
 
-  const editingCategory = userCategories.find((category) => category.id === editingCategoryId) ?? null
+  const categoryFilters = useMemo(
+    () => [
+      ...lessonOptions
+        .filter((lesson) => !hiddenCategoryIds.includes(lesson.id))
+        .map((lesson) => ({ ...lesson, source: 'lesson' as const })),
+      ...userCategories.map((category) => ({ ...category, source: 'custom' as const })),
+    ],
+    [hiddenCategoryIds, userCategories],
+  )
+
+  const allEditableCategories = useMemo(
+    () => [
+      ...lessonOptions.map((lesson) => ({ ...lesson, source: 'lesson' as const })),
+      ...userCategories.map((category) => ({ ...category, source: 'custom' as const })),
+    ],
+    [userCategories],
+  )
+
+  const editingCategory = allEditableCategories.find((category) => category.id === editingCategoryId) ?? null
 
   const initialSongIds = useMemo(() => {
     if (!editingCategoryId) {
@@ -53,9 +77,18 @@ export function LibraryPanel({
     }
 
     return allSongs
-      .filter((song) => (songCategories[song.id] ?? []).includes(editingCategoryId))
+      .filter((song) => {
+        const assignedCategories = songCategories[song.id] ?? []
+        const isManagedCategory = managedCategoryIds.includes(editingCategoryId)
+
+        if (!isManagedCategory && lessonOptions.some((lesson) => lesson.id === editingCategoryId)) {
+          return song.lessonId === editingCategoryId
+        }
+
+        return assignedCategories.includes(editingCategoryId)
+      })
       .map((song) => song.id)
-  }, [allSongs, editingCategoryId, songCategories])
+  }, [allSongs, editingCategoryId, managedCategoryIds, songCategories])
 
   const selectedModalSongIds = draftSongIds ?? initialSongIds
 
@@ -70,6 +103,26 @@ export function LibraryPanel({
     setCategoryName('')
     setCreatingCategory(false)
     setDraftSongIds(null)
+  }
+
+  const cancelCategoryCreate = () => {
+    setCategoryName('')
+    setCreatingCategory(false)
+  }
+
+  const openCategoryMenu = (event: MouseEvent, categoryId: string) => {
+    event.preventDefault()
+    setMenuCategoryId(categoryId)
+  }
+
+  const openEditorFromMenu = (categoryId: string) => {
+    setMenuCategoryId(null)
+    onOpenCategoryEditor(categoryId)
+  }
+
+  const deleteFromMenu = (categoryId: string) => {
+    setMenuCategoryId(null)
+    onDeleteCategory(categoryId)
   }
 
   const toggleDraftSong = (songId: string) => {
@@ -111,45 +164,45 @@ export function LibraryPanel({
           >
             All
           </button>
-          {lessonOptions.map((lesson) => (
-            <button
-              key={lesson.id}
-              type="button"
-              className={`filter-chip ${selectedFilterId === lesson.id ? 'filter-chip-active' : ''}`}
-              onClick={() => onFilterSelect(lesson.id)}
+          {categoryFilters.map((category) => (
+            <span
+              key={category.id}
+              className="library-category-filter"
+              onContextMenu={(event) => openCategoryMenu(event, category.id)}
             >
-              {lesson.name}
-            </button>
-          ))}
-          {userCategories.map((category) => (
-            <span key={category.id} className="library-category-filter">
               <button
                 type="button"
                 className={`filter-chip ${selectedFilterId === category.id ? 'filter-chip-active' : ''}`}
                 onClick={() => onFilterSelect(category.id)}
+                onContextMenu={(event) => openCategoryMenu(event, category.id)}
               >
                 {category.name}
               </button>
-              <button
-                type="button"
-                className="category-icon-button"
-                onClick={() => onOpenCategoryEditor(category.id)}
-                aria-label={`Manage ${category.name}`}
-              >
-                <Settings2 size={13} />
-              </button>
-              <button
-                type="button"
-                className="category-icon-button category-icon-danger"
-                onClick={() => onDeleteCategory(category.id)}
-                aria-label={`Delete ${category.name}`}
-              >
-                <Trash2 size={13} />
-              </button>
+              {managedCategoryIds.includes(category.id) && <span className="category-managed-dot" aria-hidden="true" />}
+              {menuCategoryId === category.id && (
+                <div className="category-context-menu" role="menu">
+                  <button type="button" onClick={() => openEditorFromMenu(category.id)} role="menuitem">
+                    <Settings2 size={14} />
+                    Manage songs
+                  </button>
+                  <button type="button" onClick={() => deleteFromMenu(category.id)} role="menuitem">
+                    <Trash2 size={14} />
+                    Delete category
+                  </button>
+                </div>
+              )}
             </span>
           ))}
           {creatingCategory ? (
-            <label className="inline-category-create">
+            <label
+              ref={createRef}
+              className="inline-category-create"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  cancelCategoryCreate()
+                }
+              }}
+            >
               <input
                 autoFocus
                 value={categoryName}
@@ -160,8 +213,7 @@ export function LibraryPanel({
                   }
 
                   if (event.key === 'Escape') {
-                    setCreatingCategory(false)
-                    setCategoryName('')
+                    cancelCategoryCreate()
                   }
                 }}
                 placeholder="New category"
@@ -183,6 +235,15 @@ export function LibraryPanel({
         </div>
       </div>
 
+      {menuCategoryId && (
+        <button
+          type="button"
+          className="context-menu-scrim"
+          onClick={() => setMenuCategoryId(null)}
+          aria-label="Close category menu"
+        />
+      )}
+
       <div className="library-table-header" aria-hidden="true">
         <span>Track</span>
         <span>Level</span>
@@ -195,9 +256,14 @@ export function LibraryPanel({
         {queueSongs.length > 0 ? (
           queueSongs.map((song) => {
             const favorite = favoriteSongIdSet.has(song.id)
-            const assignedCategories = userCategories.filter((category) =>
-              (songCategories[song.id] ?? []).includes(category.id),
-            )
+            const assignedCategoryIds = songCategories[song.id] ?? []
+            const assignedCategories = allEditableCategories.filter((category) => {
+              if (category.source === 'lesson' && !managedCategoryIds.includes(category.id)) {
+                return song.lessonId === category.id
+              }
+
+              return assignedCategoryIds.includes(category.id)
+            })
 
             return (
               <article

@@ -43,6 +43,12 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLibraryFilterId, setSelectedLibraryFilterId] = useState('all')
   const [userCategories, setUserCategories] = useState<UserCategory[]>(getStoredUserCategories)
+  const [hiddenCategoryIds, setHiddenCategoryIds] = useState<string[]>(() =>
+    getStoredStringArray('bass-record.hiddenCategories'),
+  )
+  const [managedCategoryIds, setManagedCategoryIds] = useState<string[]>(() =>
+    getStoredStringArray('bass-record.managedCategories'),
+  )
   const [songCategories, setSongCategories] = useState<SongCategoryMap>(getStoredSongCategories)
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [favoritesOnly] = useState(false)
@@ -113,12 +119,17 @@ function App() {
     const normalizedQuery = searchQuery.trim().toLowerCase()
     const selectedUserCategory = userCategories.find((category) => category.id === selectedLibraryFilterId)
     const selectedLesson = lessonOptions.find((lesson) => lesson.id === selectedLibraryFilterId)
+    const selectedCategoryIsManaged = managedCategoryIds.includes(selectedLibraryFilterId)
 
     return librarySongs.filter((song) => {
       const assignedCategories = songCategories[song.id] ?? []
       const matchesFilter =
         selectedLibraryFilterId === 'all' ||
-        (selectedLesson ? song.lessonId === selectedLesson.id : false) ||
+        (selectedLesson
+          ? selectedCategoryIsManaged
+            ? assignedCategories.includes(selectedLesson.id)
+            : song.lessonId === selectedLesson.id
+          : false) ||
         (selectedUserCategory ? assignedCategories.includes(selectedUserCategory.id) : false)
       const matchesFavorites = !favoritesOnly || favoriteSongIdSet.has(song.id)
       const matchesBacking = !onlyBacking || Boolean(song.variants.backing)
@@ -127,7 +138,7 @@ function App() {
 
       return matchesFilter && matchesFavorites && matchesBacking && matchesSearch
     })
-  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedLibraryFilterId, songCategories, userCategories])
+  }, [favoriteSongIdSet, favoritesOnly, managedCategoryIds, onlyBacking, searchQuery, selectedLibraryFilterId, songCategories, userCategories])
 
   const activeSong = useMemo(() => {
     if (filteredSongs.length === 0) {
@@ -254,6 +265,14 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('bass-record.userCategories', JSON.stringify(userCategories))
   }, [userCategories])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.hiddenCategories', JSON.stringify(hiddenCategoryIds))
+  }, [hiddenCategoryIds])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.managedCategories', JSON.stringify(managedCategoryIds))
+  }, [managedCategoryIds])
 
   useEffect(() => {
     window.localStorage.setItem('bass-record.songCategories', JSON.stringify(songCategories))
@@ -657,7 +676,15 @@ function App() {
   }
 
   const deleteCategory = (categoryId: string) => {
-    setUserCategories((current) => current.filter((category) => category.id !== categoryId))
+    const isBuiltInCategory = lessonOptions.some((lesson) => lesson.id === categoryId)
+
+    if (isBuiltInCategory) {
+      setHiddenCategoryIds((current) => current.includes(categoryId) ? current : [...current, categoryId])
+    } else {
+      setUserCategories((current) => current.filter((category) => category.id !== categoryId))
+    }
+
+    setManagedCategoryIds((current) => current.filter((id) => id !== categoryId))
     setSongCategories((current) => {
       const nextMap: SongCategoryMap = {}
 
@@ -702,6 +729,7 @@ function App() {
       return nextMap
     })
 
+    setManagedCategoryIds((current) => current.includes(categoryId) ? current : [...current, categoryId])
     setSelectedLibraryFilterId(categoryId)
     setEditingCategoryId(null)
   }
@@ -824,6 +852,8 @@ function App() {
                   activeSong={activeSong}
                   favoriteSongIdSet={favoriteSongIdSet}
                   userCategories={userCategories}
+                  hiddenCategoryIds={hiddenCategoryIds}
+                  managedCategoryIds={managedCategoryIds}
                   songCategories={songCategories}
                   editingCategoryId={editingCategoryId}
                   onFilterSelect={setSelectedLibraryFilterId}
