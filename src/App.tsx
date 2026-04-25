@@ -19,7 +19,7 @@ import {
   tuningPresets,
   type TuningPreset,
 } from './lib/music'
-import { librarySongs, type TrackVariant } from './lib/tracks'
+import { lessonOptions, librarySongs, type TrackVariant } from './lib/tracks'
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
@@ -41,10 +41,10 @@ function App() {
   const [selectedSongId, setSelectedSongId] = useState<string | null>(librarySongs[0]?.id ?? null)
   const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedLessonId, setSelectedLessonId] = useState('all')
-  const [selectedCategoryId, setSelectedCategoryId] = useState('all')
+  const [selectedLibraryFilterId, setSelectedLibraryFilterId] = useState('all')
   const [userCategories, setUserCategories] = useState<UserCategory[]>(getStoredUserCategories)
   const [songCategories, setSongCategories] = useState<SongCategoryMap>(getStoredSongCategories)
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [favoritesOnly] = useState(false)
   const [onlyBacking] = useState(false)
   const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>(() =>
@@ -111,19 +111,23 @@ function App() {
 
   const filteredSongs = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
+    const selectedUserCategory = userCategories.find((category) => category.id === selectedLibraryFilterId)
+    const selectedLesson = lessonOptions.find((lesson) => lesson.id === selectedLibraryFilterId)
 
     return librarySongs.filter((song) => {
-      const matchesLesson = selectedLessonId === 'all' || song.lessonId === selectedLessonId
       const assignedCategories = songCategories[song.id] ?? []
-      const matchesCategory = selectedCategoryId === 'all' || assignedCategories.includes(selectedCategoryId)
+      const matchesFilter =
+        selectedLibraryFilterId === 'all' ||
+        (selectedLesson ? song.lessonId === selectedLesson.id : false) ||
+        (selectedUserCategory ? assignedCategories.includes(selectedUserCategory.id) : false)
       const matchesFavorites = !favoritesOnly || favoriteSongIdSet.has(song.id)
       const matchesBacking = !onlyBacking || Boolean(song.variants.backing)
       const searchableText = `${song.title} ${song.lessonName} ${song.level ?? ''} ${song.tags.join(' ')}`
       const matchesSearch = !normalizedQuery || searchableText.toLowerCase().includes(normalizedQuery)
 
-      return matchesLesson && matchesCategory && matchesFavorites && matchesBacking && matchesSearch
+      return matchesFilter && matchesFavorites && matchesBacking && matchesSearch
     })
-  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedCategoryId, selectedLessonId, songCategories])
+  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedLibraryFilterId, songCategories, userCategories])
 
   const activeSong = useMemo(() => {
     if (filteredSongs.length === 0) {
@@ -645,9 +649,11 @@ function App() {
       return
     }
 
-    const id = `cat-${Date.now()}-${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
+    const slug = trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const id = `cat-${Date.now()}${slug ? `-${slug}` : ''}`
     setUserCategories((current) => [...current, { id, name: trimmedName }])
-    setSelectedCategoryId(id)
+    setSelectedLibraryFilterId(id)
+    setEditingCategoryId(id)
   }
 
   const deleteCategory = (categoryId: string) => {
@@ -666,26 +672,38 @@ function App() {
       return nextMap
     })
 
-    if (selectedCategoryId === categoryId) {
-      setSelectedCategoryId('all')
+    if (selectedLibraryFilterId === categoryId) {
+      setSelectedLibraryFilterId('all')
+    }
+
+    if (editingCategoryId === categoryId) {
+      setEditingCategoryId(null)
     }
   }
 
-  const toggleSongCategory = (songId: string, categoryId: string) => {
-    setSongCategories((current) => {
-      const assignedCategories = current[songId] ?? []
-      const nextCategories = assignedCategories.includes(categoryId)
-        ? assignedCategories.filter((id) => id !== categoryId)
-        : [...assignedCategories, categoryId]
+  const saveCategorySongs = (categoryId: string, songIds: string[]) => {
+    const nextSongIdSet = new Set(songIds)
 
-      if (nextCategories.length === 0) {
-        const rest = { ...current }
-        delete rest[songId]
-        return rest
+    setSongCategories((current) => {
+      const nextMap: SongCategoryMap = {}
+      const allSongIds = new Set([...Object.keys(current), ...librarySongs.map((song) => song.id)])
+
+      for (const songId of allSongIds) {
+        const withoutCategory = (current[songId] ?? []).filter((id) => id !== categoryId)
+        const nextCategories = nextSongIdSet.has(songId)
+          ? [...withoutCategory, categoryId]
+          : withoutCategory
+
+        if (nextCategories.length > 0) {
+          nextMap[songId] = nextCategories
+        }
       }
 
-      return { ...current, [songId]: nextCategories }
+      return nextMap
     })
+
+    setSelectedLibraryFilterId(categoryId)
+    setEditingCategoryId(null)
   }
 
   const showTuner = activeSection === 'tuner'
@@ -800,20 +818,22 @@ function App() {
 
               {showLibraryPanel && (
                 <LibraryPanel
-                  selectedLessonId={selectedLessonId}
-                  selectedCategoryId={selectedCategoryId}
+                  selectedFilterId={selectedLibraryFilterId}
                   queueSongs={queueSongs}
+                  allSongs={librarySongs}
                   activeSong={activeSong}
                   favoriteSongIdSet={favoriteSongIdSet}
                   userCategories={userCategories}
                   songCategories={songCategories}
-                  onLessonSelect={setSelectedLessonId}
-                  onCategorySelect={setSelectedCategoryId}
+                  editingCategoryId={editingCategoryId}
+                  onFilterSelect={setSelectedLibraryFilterId}
                   onSongSelect={handleSongSelect}
                   onToggleFavorite={toggleFavorite}
                   onCreateCategory={createCategory}
                   onDeleteCategory={deleteCategory}
-                  onToggleSongCategory={toggleSongCategory}
+                  onOpenCategoryEditor={setEditingCategoryId}
+                  onCloseCategoryEditor={() => setEditingCategoryId(null)}
+                  onSaveCategorySongs={saveCategorySongs}
                 />
               )}
             </aside>
