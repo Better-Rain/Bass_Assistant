@@ -1,7 +1,7 @@
 .app-shell {
   position: relative;
   height: 100vh;
-  padding: 48px 22px 120px;
+  padding: 48px 22px 18px;
   overflow: hidden;
 }
 
@@ -185,7 +185,7 @@
 
 .app-main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 20px;
   min-height: 0;
   overflow: hidden;
@@ -261,7 +261,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 8px;
-  padding-bottom: 18px;
+  padding-bottom: 0;
   scrollbar-color: rgba(255, 91, 91, 0.45) rgba(255, 255, 255, 0.04);
 }
 
@@ -404,11 +404,8 @@
 }
 
 .bottom-player {
-  position: fixed;
-  left: 264px;
-  right: 22px;
-  bottom: 18px;
-  z-index: 20;
+  position: relative;
+  z-index: 10;
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1fr) minmax(260px, 0.9fr);
   gap: 18px;
@@ -1009,6 +1006,20 @@
   min-width: 320px;
 }
 
+.library-table-header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(80px, 0.45fr) minmax(180px, 0.95fr) 56px;
+  gap: 14px;
+  padding: 0 16px 8px;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 .filter-chip,
 .toggle-chip,
 .variant-switch,
@@ -1058,16 +1069,18 @@
 }
 
 .app-library-panel .song-list {
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .song-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 20px;
-  min-height: 118px;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(80px, 0.45fr) minmax(180px, 0.95fr) 56px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  min-height: 78px;
   background:
     radial-gradient(circle at top right, rgba(255, 80, 80, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
@@ -1082,20 +1095,14 @@
 
 .song-card-main {
   display: grid;
-  gap: 14px;
-  align-content: space-between;
+  gap: 4px;
+  align-content: center;
   text-align: left;
   min-width: 0;
   color: var(--text-strong);
 }
 
-.song-card-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.song-card-top strong {
+.song-card-main strong {
   display: block;
   font-size: 1.1rem;
   color: var(--text-strong);
@@ -1105,7 +1112,7 @@
   white-space: nowrap;
 }
 
-.song-card-top span,
+.song-card-main span,
 .player-subtitle,
 .time-row span,
 .control-block span,
@@ -1164,7 +1171,7 @@
 }
 
 .song-card .favorite-button {
-  align-self: start;
+  justify-self: end;
 }
 
 .favorite-button-active {
@@ -1549,7 +1556,6 @@
 @media (max-width: 1120px) {
   .app-window {
     grid-template-columns: 1fr;
-    padding-bottom: 112px;
   }
 
   .app-sidebar {
@@ -1572,8 +1578,14 @@
 
   .spotlight-row,
   .workspace-grid,
-  .bottom-player {
+  .bottom-player,
+  .library-table-header,
+  .song-card {
     grid-template-columns: 1fr;
+  }
+
+  .library-table-header {
+    display: none;
   }
 
   .practice-grid {

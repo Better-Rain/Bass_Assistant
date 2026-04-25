@@ -36,6 +36,13 @@ export function BottomPlayer({
   onPlaybackRateChange,
   onToggleLoop,
 }: BottomPlayerProps) {
+  const playbackRates = [0.75, 1, 1.25, 1.5]
+  const cyclePlaybackRate = () => {
+    const currentIndex = playbackRates.indexOf(playbackRate)
+    const nextRate = playbackRates[(currentIndex + 1) % playbackRates.length]
+    onPlaybackRateChange(nextRate)
+  }
+
   return (
     <footer className="bottom-player">
       <div className="player-now">
@@ -96,16 +103,9 @@ export function BottomPlayer({
         </div>
 
         <div className="rate-row">
-          {[0.75, 1, 1.25, 1.5].map((rate) => (
-            <button
-              key={rate}
-              type="button"
-              className={`rate-chip ${playbackRate === rate ? 'rate-chip-active' : ''}`}
-              onClick={() => onPlaybackRateChange(rate)}
-            >
-              {rate}x
-            </button>
-          ))}
+          <button type="button" className="rate-chip rate-chip-active" onClick={cyclePlaybackRate}>
+            {playbackRate}x
+          </button>
           <button type="button" className={`rate-chip ${loopEnabled ? 'rate-chip-active' : ''}`} onClick={onToggleLoop}>
             <Repeat size={14} />
             <span>Loop</span>

@@ -49,6 +49,13 @@ export function LibraryPanel({
         </div>
       </div>
 
+      <div className="library-table-header" aria-hidden="true">
+        <span>Track</span>
+        <span>Level</span>
+        <span>Versions</span>
+        <span>Save</span>
+      </div>
+
       <div className="song-list compact-song-list">
         {queueSongs.length > 0 ? (
           queueSongs.map((song) => {
@@ -64,23 +71,21 @@ export function LibraryPanel({
                   className="song-card-main"
                   onClick={() => onSongSelect(song.id, true)}
                 >
-                  <div className="song-card-top">
-                    <div>
-                      <strong>{song.title}</strong>
-                      <span>{song.lessonName}</span>
-                    </div>
-                    <span className="song-level">{song.level ?? 'Practice'}</span>
-                  </div>
-                  <div className="song-variants">
-                    {variantOptions
-                      .filter((variant) => song.availableVariants.includes(variant.id))
-                      .map((variant) => (
-                        <span key={`${song.id}-${variant.id}`} className="variant-pill variant-pill-live">
-                          {variant.label}
-                        </span>
-                      ))}
+                  <div>
+                    <strong>{song.title}</strong>
+                    <span>{song.lessonName}</span>
                   </div>
                 </button>
+                <span className="song-level">{song.level ?? 'Practice'}</span>
+                <div className="song-variants">
+                  {variantOptions
+                    .filter((variant) => song.availableVariants.includes(variant.id))
+                    .map((variant) => (
+                      <span key={`${song.id}-${variant.id}`} className="variant-pill variant-pill-live">
+                        {variant.label}
+                      </span>
+                    ))}
+                </div>
                 <button
                   type="button"
                   className={`favorite-button ${favorite ? 'favorite-button-active' : ''}`}
