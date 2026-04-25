@@ -19,7 +19,7 @@ import {
   tuningPresets,
   type TuningPreset,
 } from './lib/music'
-import { lessonOptions, librarySongs, type TrackVariant } from './lib/tracks'
+import { lessonOptions, librarySongs, type LibrarySong, type TrackVariant } from './lib/tracks'
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
@@ -93,6 +93,9 @@ function App() {
     output: GainNode
     tremolo: GainNode
   } | null>(null)
+  const activeSongRef = useRef<LibrarySong | null>(null)
+  const queueSongsRef = useRef<LibrarySong[]>([])
+  const playbackModeRef = useRef<PlaybackMode>('sequential')
 
   const tuning = useMemo<TuningPreset>(
     () => tuningPresets.find((item) => item.id === selectedTuningId) ?? tuningPresets[0],
@@ -217,6 +220,51 @@ function App() {
 
     return queueSongs[nextIndex]
   }, [activeSong, playbackMode, queueSongs])
+
+  useEffect(() => {
+    activeSongRef.current = activeSong
+    queueSongsRef.current = queueSongs
+    playbackModeRef.current = playbackMode
+  }, [activeSong, playbackMode, queueSongs])
+
+  const getNextQueueSongFromRefs = useCallback((direction: -1 | 1, manual = true) => {
+    const currentQueueSongs = queueSongsRef.current
+    const currentActiveSong = activeSongRef.current
+    const currentPlaybackMode = playbackModeRef.current
+
+    if (currentQueueSongs.length === 0) {
+      return null
+    }
+
+    if (!manual && currentPlaybackMode === 'stop-after-current') {
+      return null
+    }
+
+    if (currentPlaybackMode === 'shuffle') {
+      if (currentQueueSongs.length === 1) {
+        return currentQueueSongs[0]
+      }
+
+      const otherSongs = currentActiveSong
+        ? currentQueueSongs.filter((song) => song.id !== currentActiveSong.id)
+        : currentQueueSongs
+      return otherSongs[Math.floor(Math.random() * otherSongs.length)] ?? null
+    }
+
+    const currentIndex = currentActiveSong
+      ? currentQueueSongs.findIndex((song) => song.id === currentActiveSong.id)
+      : -1
+    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : currentQueueSongs.length
+    const nextIndex = baseIndex + direction
+
+    if (nextIndex < 0 || nextIndex >= currentQueueSongs.length) {
+      return currentPlaybackMode === 'repeat-list'
+        ? currentQueueSongs[(nextIndex + currentQueueSongs.length) % currentQueueSongs.length]
+        : null
+    }
+
+    return currentQueueSongs[nextIndex]
+  }, [])
 
   const backingReadyCount = useMemo(
     () => librarySongs.filter((song) => song.availableVariants.includes('backing')).length,
@@ -453,26 +501,29 @@ function App() {
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
     const onEnded = () => {
-      if (activeSong) {
-        playbackPositionsRef.current[activeSong.id] = 0
+      const currentActiveSong = activeSongRef.current
+      const currentPlaybackMode = playbackModeRef.current
+
+      if (currentActiveSong) {
+        playbackPositionsRef.current[currentActiveSong.id] = 0
         window.localStorage.setItem(
           'bass-record.playbackPositions',
           JSON.stringify(playbackPositionsRef.current),
         )
       }
 
-      if (!activeSong) {
+      if (!currentActiveSong) {
         setIsPlaying(false)
         return
       }
 
-      if (playbackMode === 'repeat-one') {
+      if (currentPlaybackMode === 'repeat-one') {
         audio.currentTime = 0
         void audio.play().catch(() => setIsPlaying(false))
         return
       }
 
-      const nextSong = getNextQueueSong(1, false)
+      const nextSong = getNextQueueSongFromRefs(1, false)
 
       if (!nextSong) {
         setIsPlaying(false)
@@ -498,7 +549,7 @@ function App() {
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [abLoopEnabled, activeSong, activeTrack, getNextQueueSong, loopEnd, loopStart, playbackMode])
+  }, [abLoopEnabled, activeSong, activeTrack, getNextQueueSongFromRefs, loopEnd, loopStart])
 
   useEffect(() => {
     const audio = audioRef.current
