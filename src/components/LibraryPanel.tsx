@@ -1,4 +1,4 @@
-import { Check, Plus, Settings2, Star, Trash2, X } from 'lucide-react'
+import { Check, Play, Plus, Settings2, Star, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent } from 'react'
 
 import type { SongCategoryMap, UserCategory } from '../app/types'
@@ -16,7 +16,7 @@ type LibraryPanelProps = {
   songCategories: SongCategoryMap
   editingCategoryId: string | null
   onFilterSelect: (filterId: string) => void
-  onSongSelect: (songId: string, autoplay?: boolean) => void
+  onSongPlay: (songId: string) => void
   onToggleFavorite: (songId: string) => void
   onCreateCategory: (name: string) => void
   onDeleteCategory: (categoryId: string) => void
@@ -37,7 +37,7 @@ export function LibraryPanel({
   songCategories,
   editingCategoryId,
   onFilterSelect,
-  onSongSelect,
+  onSongPlay,
   onToggleFavorite,
   onCreateCategory,
   onDeleteCategory,
@@ -270,16 +270,20 @@ export function LibraryPanel({
                 key={song.id}
                 className={`song-card ${song.id === activeSong?.id ? 'song-card-active' : ''}`}
               >
-                <button
-                  type="button"
-                  className="song-card-main"
-                  onClick={() => onSongSelect(song.id, true)}
-                >
+                <div className="song-card-main">
+                  <button
+                    type="button"
+                    className="song-play-button"
+                    onClick={() => onSongPlay(song.id)}
+                    aria-label={`Play ${song.title}`}
+                  >
+                    <Play size={14} fill="currentColor" />
+                  </button>
                   <div>
                     <strong>{song.title}</strong>
                     <span>{song.lessonName}</span>
                   </div>
-                </button>
+                </div>
                 <span className="song-level">{song.level ?? 'Practice'}</span>
                 <div className="song-variants">
                   {variantOptions

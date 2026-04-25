@@ -141,12 +141,12 @@ function App() {
   }, [favoriteSongIdSet, favoritesOnly, managedCategoryIds, onlyBacking, searchQuery, selectedLibraryFilterId, songCategories, userCategories])
 
   const activeSong = useMemo(() => {
-    if (filteredSongs.length === 0) {
+    if (!selectedSongId) {
       return null
     }
 
-    return filteredSongs.find((song) => song.id === selectedSongId) ?? filteredSongs[0]
-  }, [filteredSongs, selectedSongId])
+    return librarySongs.find((song) => song.id === selectedSongId) ?? null
+  }, [selectedSongId])
 
   const activeTrack = useMemo(
     () => (activeSong ? pickTrackVariant(activeSong, preferredVariant) : null),
@@ -583,8 +583,8 @@ function App() {
     )
   }
 
-  const handleSongSelect = (songId: string, autoplay = false) => {
-    autoPlayNextTrackRef.current = autoplay || isPlaying
+  const handleSongPlay = (songId: string) => {
+    autoPlayNextTrackRef.current = true
     setSelectedSongId(songId)
   }
 
@@ -857,7 +857,7 @@ function App() {
                   songCategories={songCategories}
                   editingCategoryId={editingCategoryId}
                   onFilterSelect={setSelectedLibraryFilterId}
-                  onSongSelect={handleSongSelect}
+                  onSongPlay={handleSongPlay}
                   onToggleFavorite={toggleFavorite}
                   onCreateCategory={createCategory}
                   onDeleteCategory={deleteCategory}
