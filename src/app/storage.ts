@@ -22,15 +22,6 @@ export const getStoredStringArray = (key: string) => {
   }
 }
 
-export const getStoredPlaybackPositions = () => {
-  try {
-    const value = window.localStorage.getItem('bass-record.playbackPositions')
-    return value ? (JSON.parse(value) as Record<string, number>) : {}
-  } catch {
-    return {}
-  }
-}
-
 export const getStoredMarkers = () => {
   try {
     const value = window.localStorage.getItem('bass-record.markers')

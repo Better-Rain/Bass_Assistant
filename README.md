@@ -13,7 +13,6 @@ Redline Bass Tuner is a bass practice tool focused on direct-input workflow. The
 - Backing / full / workout track switching
 - Low-interruption backing / full switching that keeps the current playback time
 - Search, favorites, playback speed, and single-track loop
-- Resume playback from the last saved position for each song
 - Desktop-player layout with sidebar navigation, top search, section workspaces, and bottom transport bar
 - Real section switching for Overview, Tuner, Library, Practice, and Input
 - Practice tools: A-B loop, metronome, lightweight visualizer, song markers, and per-track notes

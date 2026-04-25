@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './App.css'
-import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
+import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
 import { pickTrackVariant, stopOscillator, type AppSection, type PlaybackMode, type PracticeMarker, type SongCategoryMap, type UserCategory } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
 import { LibraryPanel } from './components/LibraryPanel'
@@ -83,7 +83,6 @@ function App() {
     time: number
     wasPlaying: boolean
   } | null>(null)
-  const playbackPositionsRef = useRef<Record<string, number>>(getStoredPlaybackPositions())
   const lastSavedSecondRef = useRef(-1)
   const referenceContextRef = useRef<AudioContext | null>(null)
   const metronomeContextRef = useRef<AudioContext | null>(null)
@@ -441,22 +440,12 @@ function App() {
 
       setCurrentTime(audio.currentTime)
 
-      if (!activeSong) {
-        return
-      }
-
       const wholeSecond = Math.floor(audio.currentTime)
 
       if (wholeSecond === lastSavedSecondRef.current) {
         return
       }
-
       lastSavedSecondRef.current = wholeSecond
-      playbackPositionsRef.current[activeSong.id] = audio.currentTime
-      window.localStorage.setItem(
-        'bass-record.playbackPositions',
-        JSON.stringify(playbackPositionsRef.current),
-      )
     }
 
     const onLoadStart = () => {
@@ -470,9 +459,7 @@ function App() {
         const pendingSwitch = seamlessVariantSwitchRef.current
         const shouldResumeVariantSwitch =
           pendingSwitch?.songId === activeSong.id && pendingSwitch.variant === activeTrack?.variant
-        const resumeAt = shouldResumeVariantSwitch
-          ? pendingSwitch.time
-          : playbackPositionsRef.current[activeSong.id] ?? 0
+        const resumeAt = shouldResumeVariantSwitch ? pendingSwitch.time : 0
         const safeResumeAt =
           resumeAt > 0 && audio.duration > 1 ? Math.min(resumeAt, audio.duration - 0.5) : 0
 
@@ -508,14 +495,6 @@ function App() {
     const onEnded = () => {
       const currentActiveSong = activeSongRef.current
       const currentPlaybackMode = playbackModeRef.current
-
-      if (currentActiveSong) {
-        playbackPositionsRef.current[currentActiveSong.id] = 0
-        window.localStorage.setItem(
-          'bass-record.playbackPositions',
-          JSON.stringify(playbackPositionsRef.current),
-        )
-      }
 
       if (!currentActiveSong) {
         setIsPlaying(false)
