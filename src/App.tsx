@@ -648,7 +648,7 @@ function App() {
           onSearchChange={setSearchQuery}
         />
 
-        <div className="content-scroll">
+        <div className={`content-scroll content-scroll-${activeSection}`}>
           <div className={`workspace-grid workspace-grid-${activeSection} ${showWorkspaceSide ? '' : 'workspace-grid-single'}`}>
             {showPracticeLab && (
               <PracticeLab
