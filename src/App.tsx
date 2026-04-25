@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import './App.css'
-import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredString, getStoredStringArray } from './app/storage'
-import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker } from './app/types'
+import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
+import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker, type SongCategoryMap, type UserCategory } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
 import { LibraryPanel } from './components/LibraryPanel'
 import { PracticeLab } from './components/PracticeLab'
@@ -42,6 +42,9 @@ function App() {
   const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLessonId, setSelectedLessonId] = useState('all')
+  const [selectedCategoryId, setSelectedCategoryId] = useState('all')
+  const [userCategories, setUserCategories] = useState<UserCategory[]>(getStoredUserCategories)
+  const [songCategories, setSongCategories] = useState<SongCategoryMap>(getStoredSongCategories)
   const [favoritesOnly] = useState(false)
   const [onlyBacking] = useState(false)
   const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>(() =>
@@ -111,14 +114,16 @@ function App() {
 
     return librarySongs.filter((song) => {
       const matchesLesson = selectedLessonId === 'all' || song.lessonId === selectedLessonId
+      const assignedCategories = songCategories[song.id] ?? []
+      const matchesCategory = selectedCategoryId === 'all' || assignedCategories.includes(selectedCategoryId)
       const matchesFavorites = !favoritesOnly || favoriteSongIdSet.has(song.id)
       const matchesBacking = !onlyBacking || Boolean(song.variants.backing)
       const searchableText = `${song.title} ${song.lessonName} ${song.level ?? ''} ${song.tags.join(' ')}`
       const matchesSearch = !normalizedQuery || searchableText.toLowerCase().includes(normalizedQuery)
 
-      return matchesLesson && matchesFavorites && matchesBacking && matchesSearch
+      return matchesLesson && matchesCategory && matchesFavorites && matchesBacking && matchesSearch
     })
-  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedLessonId])
+  }, [favoriteSongIdSet, favoritesOnly, onlyBacking, searchQuery, selectedCategoryId, selectedLessonId, songCategories])
 
   const activeSong = useMemo(() => {
     if (filteredSongs.length === 0) {
@@ -241,6 +246,14 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('bass-record.favorites', JSON.stringify(favoriteSongIds))
   }, [favoriteSongIds])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.userCategories', JSON.stringify(userCategories))
+  }, [userCategories])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.songCategories', JSON.stringify(songCategories))
+  }, [songCategories])
 
   useEffect(() => {
     window.localStorage.setItem('bass-record.playbackRate', String(playbackRate))
@@ -617,6 +630,64 @@ function App() {
     setPracticeNotes((current) => ({ ...current, [activeSong.id]: note }))
   }
 
+  const createCategory = (name: string) => {
+    const trimmedName = name.trim()
+
+    if (!trimmedName) {
+      return
+    }
+
+    const duplicate = userCategories.some(
+      (category) => category.name.toLowerCase() === trimmedName.toLowerCase(),
+    )
+
+    if (duplicate) {
+      return
+    }
+
+    const id = `cat-${Date.now()}-${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`
+    setUserCategories((current) => [...current, { id, name: trimmedName }])
+    setSelectedCategoryId(id)
+  }
+
+  const deleteCategory = (categoryId: string) => {
+    setUserCategories((current) => current.filter((category) => category.id !== categoryId))
+    setSongCategories((current) => {
+      const nextMap: SongCategoryMap = {}
+
+      for (const [songId, categoryIds] of Object.entries(current)) {
+        const nextCategoryIds = categoryIds.filter((id) => id !== categoryId)
+
+        if (nextCategoryIds.length > 0) {
+          nextMap[songId] = nextCategoryIds
+        }
+      }
+
+      return nextMap
+    })
+
+    if (selectedCategoryId === categoryId) {
+      setSelectedCategoryId('all')
+    }
+  }
+
+  const toggleSongCategory = (songId: string, categoryId: string) => {
+    setSongCategories((current) => {
+      const assignedCategories = current[songId] ?? []
+      const nextCategories = assignedCategories.includes(categoryId)
+        ? assignedCategories.filter((id) => id !== categoryId)
+        : [...assignedCategories, categoryId]
+
+      if (nextCategories.length === 0) {
+        const rest = { ...current }
+        delete rest[songId]
+        return rest
+      }
+
+      return { ...current, [songId]: nextCategories }
+    })
+  }
+
   const showTuner = activeSection === 'tuner'
   const showRig = activeSection === 'tuner' || activeSection === 'input'
   const showReference = activeSection === 'input'
@@ -730,12 +801,19 @@ function App() {
               {showLibraryPanel && (
                 <LibraryPanel
                   selectedLessonId={selectedLessonId}
+                  selectedCategoryId={selectedCategoryId}
                   queueSongs={queueSongs}
                   activeSong={activeSong}
                   favoriteSongIdSet={favoriteSongIdSet}
+                  userCategories={userCategories}
+                  songCategories={songCategories}
                   onLessonSelect={setSelectedLessonId}
+                  onCategorySelect={setSelectedCategoryId}
                   onSongSelect={handleSongSelect}
                   onToggleFavorite={toggleFavorite}
+                  onCreateCategory={createCategory}
+                  onDeleteCategory={deleteCategory}
+                  onToggleSongCategory={toggleSongCategory}
                 />
               )}
             </aside>

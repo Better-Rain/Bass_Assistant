@@ -1,29 +1,52 @@
-﻿import { Star } from 'lucide-react'
+﻿import { Plus, Star, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 
+import type { SongCategoryMap, UserCategory } from '../app/types'
 import { lessonOptions, variantOptions, type LibrarySong } from '../lib/tracks'
 
 type LibraryPanelProps = {
   selectedLessonId: string
+  selectedCategoryId: string
   queueSongs: LibrarySong[]
   activeSong: LibrarySong | null
   favoriteSongIdSet: Set<string>
+  userCategories: UserCategory[]
+  songCategories: SongCategoryMap
   onLessonSelect: (lessonId: string) => void
+  onCategorySelect: (categoryId: string) => void
   onSongSelect: (songId: string, autoplay?: boolean) => void
   onToggleFavorite: (songId: string) => void
+  onCreateCategory: (name: string) => void
+  onDeleteCategory: (categoryId: string) => void
+  onToggleSongCategory: (songId: string, categoryId: string) => void
 }
 
 export function LibraryPanel({
   selectedLessonId,
+  selectedCategoryId,
   queueSongs,
   activeSong,
   favoriteSongIdSet,
+  userCategories,
+  songCategories,
   onLessonSelect,
+  onCategorySelect,
   onSongSelect,
   onToggleFavorite,
+  onCreateCategory,
+  onDeleteCategory,
+  onToggleSongCategory,
 }: LibraryPanelProps) {
+  const [categoryName, setCategoryName] = useState('')
+
+  const submitCategory = () => {
+    onCreateCategory(categoryName)
+    setCategoryName('')
+  }
+
   return (
     <section className="panel library-panel app-library-panel">
-      <div className="section-heading">
+      <div className="section-heading library-heading">
         <div>
           <p className="panel-label">Library</p>
           <h2>Tracks</h2>
@@ -34,7 +57,7 @@ export function LibraryPanel({
             className={`filter-chip ${selectedLessonId === 'all' ? 'filter-chip-active' : ''}`}
             onClick={() => onLessonSelect('all')}
           >
-            All
+            All Lessons
           </button>
           {lessonOptions.map((lesson) => (
             <button
@@ -49,10 +72,64 @@ export function LibraryPanel({
         </div>
       </div>
 
+      <div className="category-manager">
+        <div className="category-toolbar">
+          <div>
+            <span>Custom categories</span>
+            <strong>{userCategories.length} saved</strong>
+          </div>
+          <label className="category-create">
+            <input
+              value={categoryName}
+              onChange={(event) => setCategoryName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  submitCategory()
+                }
+              }}
+              placeholder="Create a category"
+            />
+            <button type="button" onClick={submitCategory} aria-label="Create category">
+              <Plus size={15} />
+            </button>
+          </label>
+        </div>
+
+        <div className="category-filter-row">
+          <button
+            type="button"
+            className={`category-filter-chip ${selectedCategoryId === 'all' ? 'category-filter-chip-active' : ''}`}
+            onClick={() => onCategorySelect('all')}
+          >
+            All Categories
+          </button>
+          {userCategories.map((category) => (
+            <span key={category.id} className="category-filter-item">
+              <button
+                type="button"
+                className={`category-filter-chip ${selectedCategoryId === category.id ? 'category-filter-chip-active' : ''}`}
+                onClick={() => onCategorySelect(category.id)}
+              >
+                {category.name}
+              </button>
+              <button
+                type="button"
+                className="category-delete-button"
+                onClick={() => onDeleteCategory(category.id)}
+                aria-label={`Delete ${category.name}`}
+              >
+                <Trash2 size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <div className="library-table-header" aria-hidden="true">
         <span>Track</span>
         <span>Level</span>
         <span>Versions</span>
+        <span>Categories</span>
         <span>Save</span>
       </div>
 
@@ -60,6 +137,7 @@ export function LibraryPanel({
         {queueSongs.length > 0 ? (
           queueSongs.map((song) => {
             const favorite = favoriteSongIdSet.has(song.id)
+            const assignedCategories = songCategories[song.id] ?? []
 
             return (
               <article
@@ -85,6 +163,22 @@ export function LibraryPanel({
                         {variant.label}
                       </span>
                     ))}
+                </div>
+                <div className="song-category-picker">
+                  {userCategories.length > 0 ? (
+                    userCategories.map((category) => (
+                      <button
+                        key={`${song.id}-${category.id}`}
+                        type="button"
+                        className={`song-category-chip ${assignedCategories.includes(category.id) ? 'song-category-chip-active' : ''}`}
+                        onClick={() => onToggleSongCategory(song.id, category.id)}
+                      >
+                        {category.name}
+                      </button>
+                    ))
+                  ) : (
+                    <small>Create categories above</small>
+                  )}
                 </div>
                 <button
                   type="button"

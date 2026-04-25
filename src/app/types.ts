@@ -9,6 +9,13 @@ export type PracticeMarker = {
   label: string
 }
 
+export type UserCategory = {
+  id: string
+  name: string
+}
+
+export type SongCategoryMap = Record<string, string[]>
+
 export const sectionItems: { id: AppSection; label: string }[] = [
   { id: 'tuner', label: 'Tuner' },
   { id: 'library', label: 'Library' },

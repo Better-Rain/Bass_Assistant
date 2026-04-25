@@ -1,4 +1,4 @@
-﻿import type { PracticeMarker } from './types'
+﻿import type { PracticeMarker, SongCategoryMap, UserCategory } from './types'
 
 export const getStoredNumber = (key: string, fallback: number) => {
   const value = Number(window.localStorage.getItem(key))
@@ -44,6 +44,25 @@ export const getStoredNotes = () => {
   try {
     const value = window.localStorage.getItem('bass-record.practiceNotes')
     return value ? (JSON.parse(value) as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+
+export const getStoredUserCategories = () => {
+  try {
+    const value = window.localStorage.getItem('bass-record.userCategories')
+    return value ? (JSON.parse(value) as UserCategory[]) : []
+  } catch {
+    return []
+  }
+}
+
+export const getStoredSongCategories = () => {
+  try {
+    const value = window.localStorage.getItem('bass-record.songCategories')
+    return value ? (JSON.parse(value) as SongCategoryMap) : {}
   } catch {
     return {}
   }
