@@ -677,10 +677,24 @@ function App() {
     )
   }
 
-  const handleSongPlay = (songId: string) => {
-    setQueueSongIds((current) => current.includes(songId) ? current : [...current, songId])
+  const requestSongPlayback = (songId: string) => {
+    const audio = audioRef.current
+
+    if (songId === selectedSongId && audio && activeTrack) {
+      void audio.play().catch(() => {
+        setIsPlaying(false)
+      })
+      return
+    }
+
+    pendingTrackAutoplayRef.current = true
     autoPlayNextTrackRef.current = true
     setSelectedSongId(songId)
+  }
+
+  const handleSongPlay = (songId: string) => {
+    setQueueSongIds((current) => current.includes(songId) ? current : [...current, songId])
+    requestSongPlayback(songId)
   }
 
   const playCategory = (categoryId: string) => {
@@ -690,8 +704,7 @@ function App() {
     setQueueOpen(true)
 
     if (categorySongs[0]) {
-      autoPlayNextTrackRef.current = true
-      setSelectedSongId(categorySongs[0].id)
+      requestSongPlayback(categorySongs[0].id)
     }
   }
 
