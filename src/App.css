@@ -1497,6 +1497,126 @@
   gap: 8px;
 }
 
+.queue-control {
+  position: relative;
+}
+
+.queue-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+  z-index: 45;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  width: min(430px, calc(100vw - 48px));
+  max-height: min(520px, calc(100vh - 180px));
+  padding: 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 74, 74, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(20, 21, 27, 0.98), rgba(9, 10, 13, 0.98));
+  border: 1px solid rgba(255, 117, 117, 0.2);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
+}
+
+.queue-popover-header,
+.queue-track,
+.queue-track button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.queue-popover-header {
+  justify-content: space-between;
+}
+
+.queue-popover-header strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.queue-clear-button,
+.queue-remove-button {
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.queue-clear-button {
+  padding: 8px 12px;
+}
+
+.queue-track-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(255, 91, 91, 0.45) rgba(255, 255, 255, 0.04);
+}
+
+.queue-track {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 8px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.queue-track-active {
+  background: rgba(181, 46, 46, 0.18);
+  border-color: rgba(255, 117, 117, 0.32);
+}
+
+.queue-track button:first-child {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-strong);
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-track button:first-child span {
+  flex: 0 0 auto;
+  color: #ff8585;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+}
+
+.queue-track button:first-child strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-track button:first-child small {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.queue-remove-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+}
+
+.queue-empty {
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-soft);
+  text-align: center;
+}
+
 .practice-lab-panel {
   display: grid;
   gap: 22px;

@@ -17,6 +17,7 @@ type LibraryPanelProps = {
   editingCategoryId: string | null
   onFilterSelect: (filterId: string) => void
   onSongPlay: (songId: string) => void
+  onPlayCategory: (categoryId: string) => void
   onToggleFavorite: (songId: string) => void
   onCreateCategory: (name: string) => void
   onDeleteCategory: (categoryId: string) => void
@@ -38,6 +39,7 @@ export function LibraryPanel({
   editingCategoryId,
   onFilterSelect,
   onSongPlay,
+  onPlayCategory,
   onToggleFavorite,
   onCreateCategory,
   onDeleteCategory,
@@ -120,6 +122,11 @@ export function LibraryPanel({
     onOpenCategoryEditor(categoryId)
   }
 
+  const playCategoryFromMenu = (categoryId: string) => {
+    setMenuCategoryId(null)
+    onPlayCategory(categoryId)
+  }
+
   const deleteFromMenu = (categoryId: string) => {
     setMenuCategoryId(null)
     onDeleteCategory(categoryId)
@@ -181,6 +188,10 @@ export function LibraryPanel({
               {managedCategoryIds.includes(category.id) && <span className="category-managed-dot" aria-hidden="true" />}
               {menuCategoryId === category.id && (
                 <div className="category-context-menu" role="menu">
+                  <button type="button" onClick={() => playCategoryFromMenu(category.id)} role="menuitem">
+                    <Play size={14} fill="currentColor" />
+                    Play category
+                  </button>
                   <button type="button" onClick={() => openEditorFromMenu(category.id)} role="menuitem">
                     <Settings2 size={14} />
                     Manage songs

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './App.css'
 import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
-import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker, type SongCategoryMap, type UserCategory } from './app/types'
+import { pickTrackVariant, stopOscillator, type AppSection, type PlaybackMode, type PracticeMarker, type SongCategoryMap, type UserCategory } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
 import { LibraryPanel } from './components/LibraryPanel'
 import { PracticeLab } from './components/PracticeLab'
@@ -40,6 +40,9 @@ function App() {
   const [referenceEnabled, setReferenceEnabled] = useState(false)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(librarySongs[0]?.id ?? null)
   const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
+  const [queueSongIds, setQueueSongIds] = useState<string[]>([])
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('sequential')
+  const [queueOpen, setQueueOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLibraryFilterId, setSelectedLibraryFilterId] = useState('all')
   const [userCategories, setUserCategories] = useState<UserCategory[]>(getStoredUserCategories)
@@ -59,7 +62,6 @@ function App() {
   const [playbackRate, setPlaybackRate] = useState(() =>
     getStoredNumber('bass-record.playbackRate', 1),
   )
-  const [loopEnabled, setLoopEnabled] = useState(false)
   const [abLoopEnabled, setAbLoopEnabled] = useState(false)
   const [loopStart, setLoopStart] = useState<number | null>(null)
   const [loopEnd, setLoopEnd] = useState<number | null>(null)
@@ -159,6 +161,62 @@ function App() {
     [activeSong, preferredVariant],
   )
 
+  const queueSongs = useMemo(
+    () => queueSongIds.map((songId) => librarySongs.find((song) => song.id === songId)).filter((song): song is NonNullable<typeof song> => Boolean(song)),
+    [queueSongIds],
+  )
+
+  const getCategorySongs = useCallback((categoryId: string) => {
+    const selectedUserCategory = userCategories.find((category) => category.id === categoryId)
+    const selectedLesson = lessonOptions.find((lesson) => lesson.id === categoryId)
+    const selectedCategoryIsManaged = managedCategoryIds.includes(categoryId)
+
+    return librarySongs.filter((song) => {
+      const assignedCategories = songCategories[song.id] ?? []
+
+      if (selectedLesson) {
+        return selectedCategoryIsManaged
+          ? assignedCategories.includes(selectedLesson.id)
+          : song.lessonId === selectedLesson.id
+      }
+
+      return selectedUserCategory ? assignedCategories.includes(selectedUserCategory.id) : false
+    })
+  }, [managedCategoryIds, songCategories, userCategories])
+
+  const getNextQueueSong = useCallback((direction: -1 | 1, manual = true) => {
+    if (queueSongs.length === 0) {
+      return null
+    }
+
+    if (!manual && playbackMode === 'stop-after-current') {
+      return null
+    }
+
+    if (playbackMode === 'shuffle') {
+      if (queueSongs.length === 1) {
+        return queueSongs[0]
+      }
+
+      const otherSongs = activeSong
+        ? queueSongs.filter((song) => song.id !== activeSong.id)
+        : queueSongs
+      return otherSongs[Math.floor(Math.random() * otherSongs.length)] ?? null
+    }
+
+    const currentIndex = activeSong ? queueSongs.findIndex((song) => song.id === activeSong.id) : -1
+    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : queueSongs.length
+    const nextIndex = baseIndex + direction
+
+    if (nextIndex < 0 || nextIndex >= queueSongs.length) {
+      return playbackMode === 'repeat-list'
+        ? queueSongs[(nextIndex + queueSongs.length) % queueSongs.length]
+        : null
+    }
+
+    return queueSongs[nextIndex]
+  }, [activeSong, playbackMode, queueSongs])
+
   const backingReadyCount = useMemo(
     () => librarySongs.filter((song) => song.availableVariants.includes('backing')).length,
     [],
@@ -233,7 +291,6 @@ function App() {
     return 'Use the INST input on Scarlett Solo and disable OS-level noise suppression or auto gain.'
   }, [activeInput, aliasOnly, error, namedDevices.length])
 
-  const queueSongs = filteredSongs
   const quickStats = [
     {
       label: 'Library',
@@ -299,16 +356,6 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('bass-record.practiceNotes', JSON.stringify(practiceNotes))
   }, [practiceNotes])
-
-  useEffect(() => {
-    const audio = audioRef.current
-
-    if (!audio) {
-      return
-    }
-
-    audio.loop = loopEnabled
-  }, [loopEnabled])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -406,13 +453,24 @@ function App() {
         )
       }
 
-      if (loopEnabled || filteredSongs.length === 0 || !activeSong) {
+      if (!activeSong) {
         setIsPlaying(false)
         return
       }
 
-      const currentIndex = filteredSongs.findIndex((song) => song.id === activeSong.id)
-      const nextSong = filteredSongs[(currentIndex + 1) % filteredSongs.length]
+      if (playbackMode === 'repeat-one') {
+        audio.currentTime = 0
+        void audio.play().catch(() => setIsPlaying(false))
+        return
+      }
+
+      const nextSong = getNextQueueSong(1, false)
+
+      if (!nextSong) {
+        setIsPlaying(false)
+        return
+      }
+
       autoPlayNextTrackRef.current = true
       setSelectedSongId(nextSong.id)
     }
@@ -432,7 +490,7 @@ function App() {
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [abLoopEnabled, activeSong, activeTrack, filteredSongs, loopEnabled, loopEnd, loopStart])
+  }, [abLoopEnabled, activeSong, activeTrack, getNextQueueSong, loopEnd, loopStart, playbackMode])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -599,15 +657,14 @@ function App() {
   }
 
   const jumpSong = (direction: -1 | 1) => {
-    if (filteredSongs.length === 0 || !activeSong) {
+    const nextSong = getNextQueueSong(direction)
+
+    if (!nextSong) {
       return
     }
 
-    const currentIndex = filteredSongs.findIndex((song) => song.id === activeSong.id)
-    const nextIndex = (currentIndex + direction + filteredSongs.length) % filteredSongs.length
-
     autoPlayNextTrackRef.current = isPlaying
-    setSelectedSongId(filteredSongs[nextIndex].id)
+    setSelectedSongId(nextSong.id)
   }
 
   const toggleFavorite = (songId: string) => {
@@ -617,8 +674,25 @@ function App() {
   }
 
   const handleSongPlay = (songId: string) => {
+    setQueueSongIds((current) => current.includes(songId) ? current : [...current, songId])
     autoPlayNextTrackRef.current = true
     setSelectedSongId(songId)
+  }
+
+  const playCategory = (categoryId: string) => {
+    const categorySongs = getCategorySongs(categoryId)
+
+    setQueueSongIds(categorySongs.map((song) => song.id))
+    setQueueOpen(true)
+
+    if (categorySongs[0]) {
+      autoPlayNextTrackRef.current = true
+      setSelectedSongId(categorySongs[0].id)
+    }
+  }
+
+  const removeQueueSong = (songId: string) => {
+    setQueueSongIds((current) => current.filter((id) => id !== songId))
   }
 
   const handleVariantSelect = (variant: TrackVariant) => {
@@ -908,7 +982,7 @@ function App() {
               {showLibraryPanel && (
                 <LibraryPanel
                   selectedFilterId={selectedLibraryFilterId}
-                  queueSongs={queueSongs}
+                  queueSongs={filteredSongs}
                   allSongs={librarySongs}
                   activeSong={activeSong}
                   favoriteSongIdSet={favoriteSongIdSet}
@@ -919,6 +993,7 @@ function App() {
                   editingCategoryId={editingCategoryId}
                   onFilterSelect={setSelectedLibraryFilterId}
                   onSongPlay={handleSongPlay}
+                  onPlayCategory={playCategory}
                   onToggleFavorite={toggleFavorite}
                   onCreateCategory={createCategory}
                   onDeleteCategory={deleteCategory}
@@ -942,8 +1017,8 @@ function App() {
         isPlaying={isPlaying}
         preferredVariant={preferredVariant}
         playbackRate={playbackRate}
-        loopEnabled={loopEnabled}
-        queueCount={filteredSongs.length}
+        playbackMode={playbackMode}
+        queueSongs={queueSongs}
         onJumpSong={jumpSong}
         onTogglePlayback={() => void togglePlayback()}
         onSeek={(nextTime) => {
@@ -958,8 +1033,18 @@ function App() {
         }}
         onVariantSelect={handleVariantSelect}
         onPlaybackRateChange={setPlaybackRate}
-        onToggleLoop={() => setLoopEnabled((current) => !current)}
-        onOpenQueue={() => setActiveSection('library')}
+        onPlaybackModeChange={setPlaybackMode}
+        onQueueSongSelect={(songId) => {
+          autoPlayNextTrackRef.current = true
+          setSelectedSongId(songId)
+        }}
+        onRemoveQueueSong={removeQueueSong}
+        onClearQueue={() => {
+          setQueueSongIds([])
+          setQueueOpen(false)
+        }}
+        queueOpen={queueOpen}
+        onToggleQueue={() => setQueueOpen((current) => !current)}
       />
     </div>
   )

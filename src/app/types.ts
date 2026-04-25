@@ -16,6 +16,8 @@ export type UserCategory = {
 
 export type SongCategoryMap = Record<string, string[]>
 
+export type PlaybackMode = 'sequential' | 'shuffle' | 'repeat-one' | 'stop-after-current' | 'repeat-list'
+
 export const sectionItems: { id: AppSection; label: string }[] = [
   { id: 'tuner', label: 'Tuner' },
   { id: 'library', label: 'Library' },
