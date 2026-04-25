@@ -723,8 +723,7 @@ function App() {
       return
     }
 
-    autoPlayNextTrackRef.current = isPlaying
-    setSelectedSongId(nextSong.id)
+    requestSongPlayback(nextSong.id)
   }
 
   const toggleFavorite = (songId: string) => {
