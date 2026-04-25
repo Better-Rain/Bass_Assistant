@@ -165,22 +165,23 @@
 
 .sidebar-stat {
   display: grid;
-  gap: 4px;
-  padding: 11px 12px;
-  border-radius: 16px;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-stat strong {
   color: var(--text-strong);
-  font-size: 0.98rem;
-  line-height: 1.25;
+  font-size: 0.9rem;
+  line-height: 1.18;
   overflow-wrap: anywhere;
 }
 
 .sidebar-stat small {
-  line-height: 1.25;
+  line-height: 1.15;
+  font-size: 0.78rem;
 }
 
 .app-main {
@@ -381,9 +382,19 @@
   align-items: start;
 }
 
+.workspace-grid-tuner {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+  gap: 16px;
+}
+
 .workspace-grid-library,
 .workspace-grid-input {
   grid-template-columns: 1fr;
+}
+
+.workspace-grid-library {
+  height: 100%;
+  min-height: 0;
 }
 
 .workspace-grid-practice {
@@ -396,11 +407,16 @@
 
 .workspace-side {
   align-content: start;
+  gap: 14px;
+}
+
+.workspace-grid-tuner .workspace-side {
+  gap: 12px;
 }
 
 .compact-song-list {
-  max-height: none;
-  overflow: auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 .bottom-player {
@@ -608,8 +624,8 @@
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 18px;
-  padding: 22px 24px;
+  gap: 14px;
+  padding: 18px 22px;
   border-radius: 24px;
   background:
     radial-gradient(circle at top, rgba(255, 74, 74, 0.22), transparent 45%),
@@ -684,7 +700,7 @@
 
 .meter-scale {
   position: relative;
-  height: 92px;
+  height: 82px;
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
@@ -962,10 +978,15 @@
 .app-library-panel .section-heading {
   align-items: center;
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .workspace-grid-library .app-library-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 14px;
   width: 100%;
+  min-height: 0;
 }
 
 .workspace-grid-library .workspace-side {
@@ -1085,6 +1106,11 @@
 .app-library-panel .song-list {
   grid-template-columns: 1fr;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  scrollbar-color: rgba(255, 91, 91, 0.45) rgba(255, 255, 255, 0.04);
 }
 
 .song-card {
@@ -1504,12 +1530,12 @@
 
 .preset-grid {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .preset-card {
-  padding: 16px;
-  border-radius: 18px;
+  padding: 11px 13px;
+  border-radius: 15px;
   text-align: left;
   background: rgba(255, 255, 255, 0.03);
 }
@@ -1517,6 +1543,25 @@
 .preset-card-active {
   border-color: rgba(255, 103, 103, 0.44);
   background: linear-gradient(180deg, rgba(173, 37, 37, 0.18), rgba(255, 255, 255, 0.04));
+}
+
+.rig-panel,
+.reference-panel {
+  padding: 18px;
+}
+
+.rig-panel .field {
+  margin-bottom: 10px;
+}
+
+.rig-panel .field select,
+.rig-panel .slider-row {
+  padding: 10px 12px;
+}
+
+.rig-panel .callout,
+.reference-panel .tip-box {
+  padding: 10px 12px;
 }
 
 .reference-grid {

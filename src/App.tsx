@@ -207,7 +207,7 @@ function App() {
     return 'Use the INST input on Scarlett Solo and disable OS-level noise suppression or auto gain.'
   }, [activeInput, aliasOnly, error, namedDevices.length])
 
-  const queueSongs = filteredSongs.slice(0, 8)
+  const queueSongs = filteredSongs
   const quickStats = [
     {
       label: 'Library',
@@ -617,7 +617,7 @@ function App() {
     setPracticeNotes((current) => ({ ...current, [activeSong.id]: note }))
   }
 
-  const showTuner = activeSection === 'tuner' || activeSection === 'practice'
+  const showTuner = activeSection === 'tuner'
   const showRig = activeSection === 'tuner' || activeSection === 'input'
   const showReference = activeSection === 'tuner' || activeSection === 'input'
   const showLibraryPanel = activeSection === 'library'
