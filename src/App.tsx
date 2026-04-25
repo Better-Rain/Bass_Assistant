@@ -4,10 +4,8 @@ import './App.css'
 import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredPlaybackPositions, getStoredString, getStoredStringArray } from './app/storage'
 import { pickTrackVariant, stopOscillator, type AppSection, type PracticeMarker } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
-import { HeroGrid } from './components/HeroGrid'
 import { LibraryPanel } from './components/LibraryPanel'
 import { PracticeLab } from './components/PracticeLab'
-import { QueueSection } from './components/QueueSection'
 import { ReferencePanel } from './components/ReferencePanel'
 import { RigPanel } from './components/RigPanel'
 import { TitleBar } from './components/TitleBar'
@@ -17,8 +15,6 @@ import { Topbar } from './components/Topbar'
 import { useBassTuner } from './hooks/useBassTuner'
 import {
   clamp,
-  formatFrequency,
-  formatNoteName,
   midiToFrequency,
   tuningPresets,
   type TuningPreset,
@@ -33,7 +29,7 @@ function App() {
   const [selectedDeviceId, setSelectedDeviceId] = useState(() =>
     getStoredString('bass-record.device', ''),
   )
-  const [activeSection, setActiveSection] = useState<AppSection>('overview')
+  const [activeSection, setActiveSection] = useState<AppSection>('tuner')
   const [selectedTuningId, setSelectedTuningId] = useState(() =>
     getStoredString('bass-record.tuning', DEFAULT_TUNING),
   )
@@ -46,8 +42,8 @@ function App() {
   const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLessonId, setSelectedLessonId] = useState('all')
-  const [favoritesOnly, setFavoritesOnly] = useState(false)
-  const [onlyBacking, setOnlyBacking] = useState(false)
+  const [favoritesOnly] = useState(false)
+  const [onlyBacking] = useState(false)
   const [favoriteSongIds, setFavoriteSongIds] = useState<string[]>(() =>
     getStoredStringArray('bass-record.favorites'),
   )
@@ -97,7 +93,6 @@ function App() {
   const favoriteSongIdSet = useMemo(() => new Set(favoriteSongIds), [favoriteSongIds])
   const visibleDeviceId =
     devices.some((device) => device.deviceId === selectedDeviceId) ? selectedDeviceId : ''
-  const noteParts = formatNoteName(snapshot.note ?? tuning.strings[0].note)
   const tuningCents = snapshot.stringMatch?.cents ?? snapshot.cents ?? 0
   const clampedCents = clamp(tuningCents, -50, 50)
   const needleOffset = `${clampedCents + 50}%`
@@ -169,8 +164,6 @@ function App() {
 
   const sectionTitle = useMemo(() => {
     switch (activeSection) {
-      case 'overview':
-        return 'Command Center'
       case 'tuner':
         return 'Live Tuner'
       case 'library':
@@ -214,7 +207,6 @@ function App() {
     return 'Use the INST input on Scarlett Solo and disable OS-level noise suppression or auto gain.'
   }, [activeInput, aliasOnly, error, namedDevices.length])
 
-  const spotlightSongs = filteredSongs.slice(0, 5)
   const queueSongs = filteredSongs.slice(0, 8)
   const quickStats = [
     {
@@ -625,12 +617,10 @@ function App() {
     setPracticeNotes((current) => ({ ...current, [activeSong.id]: note }))
   }
 
-  const showOverview = activeSection === 'overview'
-  const showTuner = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'practice'
-  const showQueue = activeSection === 'overview'
-  const showRig = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
-  const showReference = activeSection === 'overview' || activeSection === 'tuner' || activeSection === 'input'
-  const showLibraryPanel = activeSection === 'overview' || activeSection === 'library'
+  const showTuner = activeSection === 'tuner' || activeSection === 'practice'
+  const showRig = activeSection === 'tuner' || activeSection === 'input'
+  const showReference = activeSection === 'tuner' || activeSection === 'input'
+  const showLibraryPanel = activeSection === 'library'
   const showPracticeLab = activeSection === 'practice'
   const showWorkspaceSide = showRig || showReference || showLibraryPanel
 
@@ -659,35 +649,6 @@ function App() {
         />
 
         <div className="content-scroll">
-          {showOverview && (
-            <HeroGrid
-              noteLabel={`${noteParts.pitchClass}${noteParts.octave}`}
-              frequencyLabel={signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'Waiting for note'}
-              tuningTip={currentTip}
-              perfectlyTuned={perfectlyTuned}
-              targetString={targetString}
-              targetFrequencyLabel={formatFrequency(targetFrequency)}
-              centsLabel={`${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`}
-              trackCount={librarySongs.length}
-              backingReadyCount={backingReadyCount}
-              activeInput={activeInput}
-              deviceCount={devices.length}
-              deviceHint={deviceHint}
-            />
-          )}
-
-          {showQueue && (
-            <QueueSection
-              favoritesOnly={favoritesOnly}
-              onlyBacking={onlyBacking}
-              spotlightSongs={spotlightSongs}
-              activeSong={activeSong}
-              onToggleFavoritesOnly={() => setFavoritesOnly((current) => !current)}
-              onToggleOnlyBacking={() => setOnlyBacking((current) => !current)}
-              onSongSelect={handleSongSelect}
-            />
-          )}
-
           <div className={`workspace-grid workspace-grid-${activeSection} ${showWorkspaceSide ? '' : 'workspace-grid-single'}`}>
             {showPracticeLab && (
               <PracticeLab
@@ -782,32 +743,35 @@ function App() {
           </div>
         </div>
 
-        <BottomPlayer
-          activeSong={activeSong}
-          activeTrack={activeTrack}
-          currentTime={currentTime}
-          duration={duration}
-          isPlaying={isPlaying}
-          preferredVariant={preferredVariant}
-          playbackRate={playbackRate}
-          loopEnabled={loopEnabled}
-          onJumpSong={jumpSong}
-          onTogglePlayback={() => void togglePlayback()}
-          onSeek={(nextTime) => {
-            const audio = audioRef.current
-
-            if (!audio) {
-              return
-            }
-
-            audio.currentTime = nextTime
-            setCurrentTime(nextTime)
-          }}
-          onVariantSelect={handleVariantSelect}
-          onPlaybackRateChange={setPlaybackRate}
-          onToggleLoop={() => setLoopEnabled((current) => !current)}
-        />
       </section>
+
+      <BottomPlayer
+        activeSong={activeSong}
+        activeTrack={activeTrack}
+        currentTime={currentTime}
+        duration={duration}
+        isPlaying={isPlaying}
+        preferredVariant={preferredVariant}
+        playbackRate={playbackRate}
+        loopEnabled={loopEnabled}
+        queueCount={filteredSongs.length}
+        onJumpSong={jumpSong}
+        onTogglePlayback={() => void togglePlayback()}
+        onSeek={(nextTime) => {
+          const audio = audioRef.current
+
+          if (!audio) {
+            return
+          }
+
+          audio.currentTime = nextTime
+          setCurrentTime(nextTime)
+        }}
+        onVariantSelect={handleVariantSelect}
+        onPlaybackRateChange={setPlaybackRate}
+        onToggleLoop={() => setLoopEnabled((current) => !current)}
+        onOpenQueue={() => setActiveSection('library')}
+      />
     </div>
   )
 }

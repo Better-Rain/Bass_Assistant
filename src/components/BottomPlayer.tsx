@@ -1,4 +1,4 @@
-﻿import { Repeat, SkipBack, SkipForward, Pause, Play } from 'lucide-react'
+﻿import { ListMusic, Repeat, SkipBack, SkipForward, Pause, Play } from 'lucide-react'
 
 import { formatTime } from '../app/types'
 import { variantOptions, type LibrarySong, type SongTrack, type TrackVariant } from '../lib/tracks'
@@ -12,12 +12,14 @@ type BottomPlayerProps = {
   preferredVariant: TrackVariant
   playbackRate: number
   loopEnabled: boolean
+  queueCount: number
   onJumpSong: (direction: -1 | 1) => void
   onTogglePlayback: () => void
   onSeek: (time: number) => void
   onVariantSelect: (variant: TrackVariant) => void
   onPlaybackRateChange: (rate: number) => void
   onToggleLoop: () => void
+  onOpenQueue: () => void
 }
 
 export function BottomPlayer({
@@ -29,12 +31,14 @@ export function BottomPlayer({
   preferredVariant,
   playbackRate,
   loopEnabled,
+  queueCount,
   onJumpSong,
   onTogglePlayback,
   onSeek,
   onVariantSelect,
   onPlaybackRateChange,
   onToggleLoop,
+  onOpenQueue,
 }: BottomPlayerProps) {
   const playbackRates = [0.75, 1, 1.25, 1.5]
   const cyclePlaybackRate = () => {
@@ -103,6 +107,10 @@ export function BottomPlayer({
         </div>
 
         <div className="rate-row">
+          <button type="button" className="rate-chip" onClick={onOpenQueue}>
+            <ListMusic size={14} />
+            <span>Queue {queueCount}</span>
+          </button>
           <button type="button" className="rate-chip rate-chip-active" onClick={cyclePlaybackRate}>
             {playbackRate}x
           </button>

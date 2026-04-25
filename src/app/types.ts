@@ -1,6 +1,6 @@
 ﻿import { defaultVariantOrder, type LibrarySong, type TrackVariant } from '../lib/tracks'
 
-export type AppSection = 'overview' | 'tuner' | 'library' | 'practice' | 'input'
+export type AppSection = 'tuner' | 'library' | 'practice' | 'input'
 
 export type PracticeMarker = {
   id: string
@@ -10,7 +10,6 @@ export type PracticeMarker = {
 }
 
 export const sectionItems: { id: AppSection; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
   { id: 'tuner', label: 'Tuner' },
   { id: 'library', label: 'Library' },
   { id: 'practice', label: 'Practice' },

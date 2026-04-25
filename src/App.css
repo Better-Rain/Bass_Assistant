@@ -8,7 +8,7 @@
 .app-window {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 20px;
 }
 
@@ -185,7 +185,7 @@
 
 .app-main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 20px;
   min-height: 0;
   overflow: hidden;
@@ -406,8 +406,9 @@
 .bottom-player {
   position: relative;
   z-index: 10;
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1fr) minmax(260px, 0.9fr);
+  grid-template-columns: minmax(240px, 0.9fr) minmax(360px, 1.1fr) minmax(420px, 1fr);
   gap: 18px;
   align-items: center;
   padding: 16px 20px;
@@ -426,6 +427,13 @@
 .player-right {
   display: grid;
   gap: 12px;
+}
+
+.player-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .player-now {
@@ -999,6 +1007,12 @@
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.player-right .variant-row,
+.player-right .rate-row {
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .app-library-panel .filter-group {
