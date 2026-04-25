@@ -11,6 +11,7 @@ Redline Bass Tuner is a bass practice tool focused on direct-input workflow. The
 - Reference tone playback with octave reinforcement
 - Practice library UI grouped by lesson
 - Backing / full / workout track switching
+- Low-interruption backing / full switching that keeps the current playback time
 - Search, favorites, playback speed, and single-track loop
 - Resume playback from the last saved position for each song
 - Desktop-player layout with sidebar navigation, top search, section workspaces, and bottom transport bar
@@ -63,5 +64,6 @@ npm run build
 - Disable OS-level auto gain, noise suppression, and echo cancellation when possible.
 - For tuning, pluck a single open string and let the detector lock for 1 to 2 seconds.
 - During practice, start with the backing-track version and switch to the full version for comparison when needed.
+- Backing and full versions switch at the current playback time when both files exist for the song. The workout version is not included in this seamless-switch path yet.
 - In Practice, set A and B while playback is moving, then enable A-B to repeat only that phrase.
 - Markers and notes are saved in browser or Electron local storage for each track.

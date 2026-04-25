@@ -73,6 +73,12 @@ function App() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const autoPlayNextTrackRef = useRef(false)
+  const seamlessVariantSwitchRef = useRef<{
+    songId: string
+    variant: TrackVariant
+    time: number
+    wasPlaying: boolean
+  } | null>(null)
   const playbackPositionsRef = useRef<Record<string, number>>(getStoredPlaybackPositions())
   const lastSavedSecondRef = useRef(-1)
   const referenceContextRef = useRef<AudioContext | null>(null)
@@ -360,12 +366,28 @@ function App() {
 
     const onLoadedMetadata = () => {
       if (activeSong) {
-        const resumeAt = playbackPositionsRef.current[activeSong.id] ?? 0
+        const pendingSwitch = seamlessVariantSwitchRef.current
+        const shouldResumeVariantSwitch =
+          pendingSwitch?.songId === activeSong.id && pendingSwitch.variant === activeTrack?.variant
+        const resumeAt = shouldResumeVariantSwitch
+          ? pendingSwitch.time
+          : playbackPositionsRef.current[activeSong.id] ?? 0
         const safeResumeAt =
           resumeAt > 0 && audio.duration > 1 ? Math.min(resumeAt, audio.duration - 0.5) : 0
 
         if (safeResumeAt > 0) {
           audio.currentTime = safeResumeAt
+        }
+
+        if (shouldResumeVariantSwitch) {
+          seamlessVariantSwitchRef.current = null
+          autoPlayNextTrackRef.current = false
+
+          if (pendingSwitch.wasPlaying) {
+            void audio.play().catch(() => {
+              setIsPlaying(false)
+            })
+          }
         }
       }
 
@@ -410,7 +432,7 @@ function App() {
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [abLoopEnabled, activeSong, filteredSongs, loopEnabled, loopEnd, loopStart])
+  }, [abLoopEnabled, activeSong, activeTrack, filteredSongs, loopEnabled, loopEnd, loopStart])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -420,21 +442,32 @@ function App() {
     }
 
     if (!activeTrack) {
+      seamlessVariantSwitchRef.current = null
       audio.pause()
       audio.load()
       return
     }
 
+    const pendingSwitch = seamlessVariantSwitchRef.current
+    const shouldDeferVariantPlay =
+      Boolean(
+        pendingSwitch &&
+          pendingSwitch.songId === activeSong?.id &&
+          pendingSwitch.variant === activeTrack.variant,
+      )
+
     audio.load()
 
-    if (autoPlayNextTrackRef.current || isPlaying) {
+    if (!shouldDeferVariantPlay && (autoPlayNextTrackRef.current || isPlaying)) {
       void audio.play().catch(() => {
         setIsPlaying(false)
       })
     }
 
-    autoPlayNextTrackRef.current = false
-  }, [activeTrack, isPlaying])
+    if (!shouldDeferVariantPlay) {
+      autoPlayNextTrackRef.current = false
+    }
+  }, [activeSong?.id, activeTrack, isPlaying])
 
   useEffect(() => {
     if (!referenceEnabled) {
@@ -589,7 +622,35 @@ function App() {
   }
 
   const handleVariantSelect = (variant: TrackVariant) => {
-    autoPlayNextTrackRef.current = isPlaying
+    if (variant === preferredVariant) {
+      return
+    }
+
+    const audio = audioRef.current
+    const seamlessVariants: TrackVariant[] = ['backing', 'full']
+    const canSeamlessSwitch =
+      Boolean(
+        audio &&
+          activeSong &&
+          activeTrack &&
+          activeSong.variants[variant] &&
+          seamlessVariants.includes(activeTrack.variant),
+      ) &&
+      seamlessVariants.includes(variant)
+
+    if (canSeamlessSwitch && audio && activeSong) {
+      seamlessVariantSwitchRef.current = {
+        songId: activeSong.id,
+        variant,
+        time: audio.currentTime || currentTime,
+        wasPlaying: !audio.paused,
+      }
+      autoPlayNextTrackRef.current = false
+    } else {
+      seamlessVariantSwitchRef.current = null
+      autoPlayNextTrackRef.current = isPlaying
+    }
+
     setPreferredVariant(variant)
   }
 
