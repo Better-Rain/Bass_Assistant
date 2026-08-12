@@ -1,4 +1,4 @@
-import { Check, Play, Plus, Settings2, Star, Trash2, X } from 'lucide-react'
+import { Check, Pencil, Play, Plus, RotateCcw, Settings2, Star, Trash2, X } from 'lucide-react'
 import { useMemo, useRef, useState, type MouseEvent } from 'react'
 
 import type { SongCategoryMap, UserCategory } from '../app/types'
@@ -20,7 +20,9 @@ type LibraryPanelProps = {
   onPlayCategory: (categoryId: string) => void
   onToggleFavorite: (songId: string) => void
   onCreateCategory: (name: string) => void
+  onRenameCategory: (categoryId: string, name: string) => void
   onDeleteCategory: (categoryId: string) => void
+  onRestoreHiddenCategories: () => void
   onOpenCategoryEditor: (categoryId: string) => void
   onCloseCategoryEditor: () => void
   onSaveCategorySongs: (categoryId: string, songIds: string[]) => void
@@ -42,7 +44,9 @@ export function LibraryPanel({
   onPlayCategory,
   onToggleFavorite,
   onCreateCategory,
+  onRenameCategory,
   onDeleteCategory,
+  onRestoreHiddenCategories,
   onOpenCategoryEditor,
   onCloseCategoryEditor,
   onSaveCategorySongs,
@@ -51,6 +55,8 @@ export function LibraryPanel({
   const [categoryName, setCategoryName] = useState('')
   const [draftSongIds, setDraftSongIds] = useState<string[] | null>(null)
   const [menuCategoryId, setMenuCategoryId] = useState<string | null>(null)
+  const [renamingCategoryId, setRenamingCategoryId] = useState<string | null>(null)
+  const [renameCategoryName, setRenameCategoryName] = useState('')
   const createRef = useRef<HTMLLabelElement | null>(null)
 
   const categoryFilters = useMemo(
@@ -132,6 +138,38 @@ export function LibraryPanel({
     onDeleteCategory(categoryId)
   }
 
+  const beginRename = (categoryId: string) => {
+    const category = userCategories.find((item) => item.id === categoryId)
+
+    if (!category) {
+      return
+    }
+
+    setMenuCategoryId(null)
+    setRenamingCategoryId(categoryId)
+    setRenameCategoryName(category.name)
+  }
+
+  const cancelRename = () => {
+    setRenamingCategoryId(null)
+    setRenameCategoryName('')
+  }
+
+  const submitRename = () => {
+    if (!renamingCategoryId) {
+      return
+    }
+
+    const trimmedName = renameCategoryName.trim()
+
+    if (!trimmedName) {
+      return
+    }
+
+    onRenameCategory(renamingCategoryId, trimmedName)
+    cancelRename()
+  }
+
   const toggleDraftSong = (songId: string) => {
     setDraftSongIds((current) => {
       const nextSongIds = current ?? initialSongIds
@@ -177,14 +215,46 @@ export function LibraryPanel({
               className="library-category-filter"
               onContextMenu={(event) => openCategoryMenu(event, category.id)}
             >
-              <button
-                type="button"
-                className={`filter-chip ${selectedFilterId === category.id ? 'filter-chip-active' : ''}`}
-                onClick={() => onFilterSelect(category.id)}
-                onContextMenu={(event) => openCategoryMenu(event, category.id)}
-              >
-                {category.name}
-              </button>
+              {renamingCategoryId === category.id ? (
+                <label
+                  className="inline-category-create inline-category-rename"
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      cancelRename()
+                    }
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={renameCategoryName}
+                    onChange={(event) => setRenameCategoryName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        submitRename()
+                      }
+                      if (event.key === 'Escape') {
+                        cancelRename()
+                      }
+                    }}
+                    aria-label="Rename category"
+                  />
+                  <button type="button" onClick={submitRename} aria-label="Save category name">
+                    <Check size={14} />
+                  </button>
+                  <button type="button" onClick={cancelRename} aria-label="Cancel category rename">
+                    <X size={14} />
+                  </button>
+                </label>
+              ) : (
+                <button
+                  type="button"
+                  className={`filter-chip ${selectedFilterId === category.id ? 'filter-chip-active' : ''}`}
+                  onClick={() => onFilterSelect(category.id)}
+                  onContextMenu={(event) => openCategoryMenu(event, category.id)}
+                >
+                  {category.name}
+                </button>
+              )}
               {managedCategoryIds.includes(category.id) && <span className="category-managed-dot" aria-hidden="true" />}
               {menuCategoryId === category.id && (
                 <div className="category-context-menu" role="menu">
@@ -196,14 +266,26 @@ export function LibraryPanel({
                     <Settings2 size={14} />
                     Manage songs
                   </button>
+                  {category.source === 'custom' && (
+                    <button type="button" onClick={() => beginRename(category.id)} role="menuitem">
+                      <Pencil size={14} />
+                      Rename category
+                    </button>
+                  )}
                   <button type="button" onClick={() => deleteFromMenu(category.id)} role="menuitem">
                     <Trash2 size={14} />
-                    Delete category
+                    {category.source === 'lesson' ? 'Hide category' : 'Delete category'}
                   </button>
                 </div>
               )}
             </span>
           ))}
+          {hiddenCategoryIds.length > 0 && (
+            <button type="button" className="filter-chip restore-category-chip" onClick={onRestoreHiddenCategories}>
+              <RotateCcw size={14} />
+              Restore hidden ({hiddenCategoryIds.length})
+            </button>
+          )}
           {creatingCategory ? (
             <label
               ref={createRef}

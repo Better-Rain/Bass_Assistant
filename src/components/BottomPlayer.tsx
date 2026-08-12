@@ -1,5 +1,5 @@
-import { ListMusic, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Trash2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ChevronDown, ChevronUp, GripVertical, ListMusic, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 import { formatTime, type PlaybackMode } from '../app/types'
 import { variantOptions, type LibrarySong, type SongTrack, type TrackVariant } from '../lib/tracks'
@@ -23,6 +23,7 @@ type BottomPlayerProps = {
   onPlaybackModeChange: (mode: PlaybackMode) => void
   onQueueSongSelect: (songId: string) => void
   onRemoveQueueSong: (songId: string) => void
+  onReorderQueue: (fromIndex: number, toIndex: number) => void
   onClearQueue: () => void
   onToggleQueue: () => void
   onCloseQueue: () => void
@@ -55,11 +56,13 @@ export function BottomPlayer({
   onPlaybackModeChange,
   onQueueSongSelect,
   onRemoveQueueSong,
+  onReorderQueue,
   onClearQueue,
   onToggleQueue,
   onCloseQueue,
 }: BottomPlayerProps) {
   const queueControlRef = useRef<HTMLDivElement | null>(null)
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null)
   const playbackRates = [0.75, 1, 1.25, 1.5]
   const activePlaybackMode = playbackModes.find((mode) => mode.id === playbackMode) ?? playbackModes[0]
 
@@ -171,12 +174,45 @@ export function BottomPlayer({
                 <div className="queue-track-list">
                   {queueSongs.length > 0 ? (
                     queueSongs.map((song, index) => (
-                      <div key={`${song.id}-${index}`} className={`queue-track ${song.id === activeSong?.id ? 'queue-track-active' : ''}`}>
-                        <button type="button" onClick={() => onQueueSongSelect(song.id)}>
+                      <div
+                        key={`${song.id}-${index}`}
+                        className={`queue-track ${song.id === activeSong?.id ? 'queue-track-active' : ''} ${draggedQueueIndex === index ? 'queue-track-dragging' : ''}`}
+                        draggable
+                        onDragStart={() => setDraggedQueueIndex(index)}
+                        onDragEnd={() => setDraggedQueueIndex(null)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          if (draggedQueueIndex !== null && draggedQueueIndex !== index) {
+                            onReorderQueue(draggedQueueIndex, index)
+                          }
+                          setDraggedQueueIndex(null)
+                        }}
+                      >
+                        <span className="queue-drag-handle" aria-hidden="true"><GripVertical size={15} /></span>
+                        <button type="button" className="queue-track-main" onClick={() => onQueueSongSelect(song.id)}>
                           <span>{String(index + 1).padStart(2, '0')}</span>
                           <strong>{song.title}</strong>
                           <small>{song.lessonName}</small>
                         </button>
+                        <span className="queue-reorder-buttons">
+                          <button
+                            type="button"
+                            onClick={() => onReorderQueue(index, index - 1)}
+                            disabled={index === 0}
+                            aria-label={`Move ${song.title} up`}
+                          >
+                            <ChevronUp size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onReorderQueue(index, index + 1)}
+                            disabled={index === queueSongs.length - 1}
+                            aria-label={`Move ${song.title} down`}
+                          >
+                            <ChevronDown size={13} />
+                          </button>
+                        </span>
                         <button type="button" className="queue-remove-button" onClick={() => onRemoveQueueSong(song.id)} aria-label={`Remove ${song.title}`}>
                           <Trash2 size={14} />
                         </button>

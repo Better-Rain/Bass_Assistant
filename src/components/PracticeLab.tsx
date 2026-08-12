@@ -94,7 +94,7 @@ export function PracticeLab({
               {abLoopEnabled ? 'A-B on' : 'A-B off'}
             </button>
           </div>
-          <small>Loop a hard phrase without changing single-track repeat.</small>
+          <small>Loop a hard phrase without changing single-track repeat. Shortcuts: A / B set points, L toggles.</small>
         </article>
 
         <article className="practice-card">

@@ -3,20 +3,23 @@
 import type { PitchSnapshot } from '../hooks/useBassTuner'
 import { formatFrequency, formatNoteName, midiToFrequency, type TuningPreset } from '../lib/music'
 
+const METER_RANGE_CENTS = 100
+const METER_TICKS = [-100, -50, -20, 0, 20, 50, 100]
+
 type TunerPanelProps = {
   snapshot: PitchSnapshot
   tuning: TuningPreset
   concertA: number
   signalPresent: boolean
-  targetString: string
-  targetFrequency: number
+  targetLocked: boolean
+  targetString: string | null
+  targetFrequency: number | null
   tuningCents: number
   needleOffset: string
   perfectlyTuned: boolean
   inTune: boolean
   signalLevel: number
   clarityPercent: number
-  onReferenceString: (note: string) => void
 }
 
 export function TunerPanel({
@@ -25,6 +28,7 @@ export function TunerPanel({
   concertA,
   signalPresent,
   targetString,
+  targetLocked,
   targetFrequency,
   tuningCents,
   needleOffset,
@@ -32,11 +36,16 @@ export function TunerPanel({
   inTune,
   signalLevel,
   clarityPercent,
-  onReferenceString,
 }: TunerPanelProps) {
-  const noteParts = formatNoteName(snapshot.note ?? tuning.strings[0].note)
+  const noteParts = formatNoteName(snapshot.note ?? targetString ?? tuning.strings[0].note)
   const displayNote = signalPresent ? noteParts.pitchClass : '--'
   const displayOctave = signalPresent ? noteParts.octave : ''
+  const targetAvailable = targetString !== null && targetFrequency !== null
+  const centered = targetAvailable && Math.abs(tuningCents) <= 0.5
+  const centsClass = centered ? 'centered' : tuningCents > 0 ? 'sharp' : 'flat'
+  const centsMessage = centered
+    ? 'Centered'
+    : `${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`
 
   return (
     <section className="panel tuner-panel">
@@ -46,8 +55,14 @@ export function TunerPanel({
           <h2>Main Tuner</h2>
         </div>
         <div className="panel-meta">
-          <span>{signalPresent ? formatFrequency(snapshot.frequency ?? 0) : 'No pitch yet'}</span>
-          <span>{signalPresent ? `Target ${formatFrequency(targetFrequency)}` : 'Awaiting note'}</span>
+          <span>
+            {signalPresent ? formatFrequency(snapshot.detectedFrequency ?? 0) : 'No pitch yet'}
+          </span>
+          <span>
+            {targetAvailable
+              ? `${targetLocked ? 'Target' : 'Nearest'} ${formatFrequency(targetFrequency)}`
+              : 'Awaiting note'}
+          </span>
         </div>
       </div>
 
@@ -63,33 +78,52 @@ export function TunerPanel({
           <span className="note-name">{displayNote}</span>
           {displayOctave ? <span className="note-octave">{displayOctave}</span> : null}
           <p className="note-subtitle">
-            Target <strong>{targetString}</strong> - {formatFrequency(targetFrequency)}
+            {targetAvailable ? (
+              <>
+                {targetLocked ? 'Target' : 'Nearest'} <strong>{targetString}</strong> -{' '}
+                {formatFrequency(targetFrequency)}
+                {!targetLocked ? ' (locking...)' : ''}
+              </>
+            ) : (
+              'Play one open string'
+            )}
           </p>
         </div>
 
         <div className="meter-shell">
           <div className="meter-scale">
-            {[-50, -30, -10, 0, 10, 30, 50].map((tick) => (
+            {METER_TICKS.map((tick) => (
               <span
                 key={tick}
                 className={`meter-tick ${tick === 0 ? 'meter-tick-center' : ''}`}
-                style={{ left: `${tick + 50}%` }}
+                style={{ left: `${((tick + METER_RANGE_CENTS) / (METER_RANGE_CENTS * 2)) * 100}%` }}
               >
                 <i />
                 <small>{tick}</small>
               </span>
             ))}
             <div className={`tolerance-zone ${inTune ? 'tolerance-zone-hot' : ''}`} />
-            <div className="needle" style={{ left: needleOffset }} />
+            <div
+              className={`needle ${signalPresent && targetAvailable ? '' : 'needle-hidden'}`}
+              style={{ left: needleOffset }}
+            />
           </div>
 
           <div className="meter-readout">
-            <span className={tuningCents > 0 ? 'sharp' : 'flat'}>
-              {signalPresent
-                ? `${Math.abs(tuningCents).toFixed(1)} cents ${tuningCents > 0 ? 'sharp' : 'flat'}`
+            <span className={centsClass}>
+              {signalPresent && targetAvailable
+                ? centsMessage
                 : 'Waiting for direct signal'}
             </span>
-            <strong>{perfectlyTuned ? 'Perfect' : inTune && signalPresent ? 'Close enough' : 'Adjust slowly'}</strong>
+            <strong>
+              {perfectlyTuned
+                ? 'Perfect'
+                : !targetLocked && signalPresent
+                  ? `Finding ${targetString ?? 'string'}`
+                  : inTune && signalPresent
+                    ? 'Close enough'
+                    : 'Adjust slowly'}
+            </strong>
           </div>
         </div>
       </div>
@@ -97,20 +131,20 @@ export function TunerPanel({
       <div className="string-grid">
         {tuning.strings.map((item) => {
           const active = snapshot.stringMatch?.note === item.note
+          const candidate = !targetLocked && targetString === item.note
           const itemCents = active ? Math.abs(snapshot.stringMatch?.cents ?? 999) : null
-          const itemTuned = itemCents !== null && itemCents <= 5
+          const itemTuned = itemCents !== null && itemCents <= 7
 
           return (
-            <button
+            <div
               key={item.note}
-              type="button"
-              className={`string-card ${active ? 'string-card-active' : ''} ${itemTuned ? 'string-card-tuned' : ''}`}
-              onClick={() => onReferenceString(item.note)}
+              className={`string-card ${active ? 'string-card-active' : ''} ${candidate ? 'string-card-candidate' : ''} ${itemTuned ? 'string-card-tuned' : ''}`}
+              aria-current={active ? 'true' : undefined}
             >
               <span>{item.label}</span>
               <strong>{item.note}</strong>
               <small>{formatFrequency(midiToFrequency(item.midi, concertA))}</small>
-            </button>
+            </div>
           )
         })}
       </div>

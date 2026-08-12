@@ -98,7 +98,7 @@ const rawTracks: RawTrack[] = lessonSeeds.flatMap((lesson) =>
     lessonId: lesson.id,
     lessonName: lesson.name,
     fileName,
-    filePath: `/library/${lesson.id}/${fileName}`,
+    filePath: `./library/${lesson.id}/${fileName}`,
   })),
 )
 

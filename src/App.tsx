@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './App.css'
-import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
+import { getStoredMarkers, getStoredNotes, getStoredNumber, getStoredNumberInRange, getStoredNumberOption, getStoredPlaybackMode, getStoredSongCategories, getStoredString, getStoredStringArray, getStoredUserCategories } from './app/storage'
 import { pickTrackVariant, stopOscillator, type AppSection, type PlaybackMode, type PracticeMarker, type SongCategoryMap, type UserCategory } from './app/types'
 import { BottomPlayer } from './components/BottomPlayer'
 import { LibraryPanel } from './components/LibraryPanel'
@@ -15,14 +15,18 @@ import { Topbar } from './components/Topbar'
 import { useBassTuner } from './hooks/useBassTuner'
 import {
   clamp,
+  getNearestString,
   midiToFrequency,
   tuningPresets,
   type TuningPreset,
 } from './lib/music'
 import { lessonOptions, librarySongs, type LibrarySong, type TrackVariant } from './lib/tracks'
+import { getNextQueueItem, getStoredQueueSongIds, moveItem, QUEUE_STORAGE_KEY } from './lib/queue'
 
 const DEFAULT_TUNING = tuningPresets[0].id
 const DEFAULT_A4 = 440
+const TUNER_METER_RANGE_CENTS = 100
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5] as const
 
 
 function App() {
@@ -40,8 +44,11 @@ function App() {
   const [referenceEnabled, setReferenceEnabled] = useState(false)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(librarySongs[0]?.id ?? null)
   const [preferredVariant, setPreferredVariant] = useState<TrackVariant>('backing')
-  const [queueSongIds, setQueueSongIds] = useState<string[]>([])
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>('sequential')
+  const availableSongIds = useMemo(() => new Set(librarySongs.map((song) => song.id)), [])
+  const [queueSongIds, setQueueSongIds] = useState<string[]>(() => getStoredQueueSongIds(availableSongIds))
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(() =>
+    getStoredPlaybackMode('bass-record.playbackMode', 'sequential'),
+  )
   const [queueOpen, setQueueOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedLibraryFilterId, setSelectedLibraryFilterId] = useState('all')
@@ -60,7 +67,7 @@ function App() {
     getStoredStringArray('bass-record.favorites'),
   )
   const [playbackRate, setPlaybackRate] = useState(() =>
-    getStoredNumber('bass-record.playbackRate', 1),
+    getStoredNumberOption('bass-record.playbackRate', 1, PLAYBACK_RATES),
   )
   const [abLoopEnabled, setAbLoopEnabled] = useState(false)
   const [loopStart, setLoopStart] = useState<number | null>(null)
@@ -96,6 +103,34 @@ function App() {
   const activeSongRef = useRef<LibrarySong | null>(null)
   const queueSongsRef = useRef<LibrarySong[]>([])
   const playbackModeRef = useRef<PlaybackMode>('sequential')
+  const stopReferenceTone = useCallback(() => {
+    const nodes = referenceNodesRef.current
+    const audioContext = referenceContextRef.current
+
+    referenceNodesRef.current = null
+    referenceContextRef.current = null
+
+    if (nodes) {
+      try {
+        const now = audioContext?.currentTime ?? 0
+        nodes.output.gain.cancelScheduledValues(now)
+        nodes.output.gain.setValueAtTime(0, now)
+      } catch {
+        // The context may already be closed during a rapid page or device transition.
+      }
+
+      stopOscillator(nodes.primary)
+      stopOscillator(nodes.octave)
+      nodes.primary.disconnect()
+      nodes.octave.disconnect()
+      nodes.tremolo.disconnect()
+      nodes.output.disconnect()
+    }
+
+    if (audioContext && audioContext.state !== 'closed') {
+      void audioContext.close().catch(() => undefined)
+    }
+  }, [])
 
   const tuning = useMemo<TuningPreset>(
     () => tuningPresets.find((item) => item.id === selectedTuningId) ?? tuningPresets[0],
@@ -114,18 +149,24 @@ function App() {
   const favoriteSongIdSet = useMemo(() => new Set(favoriteSongIds), [favoriteSongIds])
   const visibleDeviceId =
     devices.some((device) => device.deviceId === selectedDeviceId) ? selectedDeviceId : ''
-  const tuningCents = snapshot.stringMatch?.cents ?? snapshot.cents ?? 0
-  const clampedCents = clamp(tuningCents, -50, 50)
-  const needleOffset = `${clampedCents + 50}%`
-  const signalPresent = snapshot.frequency !== null
+  const candidateMatch = snapshot.detectedFrequency === null
+    ? null
+    : getNearestString(snapshot.detectedFrequency, tuning, concertA)
+  const targetMatch = snapshot.stringMatch ?? candidateMatch
+  const targetLocked = snapshot.stringMatch !== null
+  const tuningCents = targetMatch?.cents ?? 0
+  const clampedCents = clamp(tuningCents, -TUNER_METER_RANGE_CENTS, TUNER_METER_RANGE_CENTS)
+  const needleOffset =
+    `${((clampedCents + TUNER_METER_RANGE_CENTS) / (TUNER_METER_RANGE_CENTS * 2)) * 100}%`
+  const signalPresent = snapshot.detectedFrequency !== null
   const signalLevel = Math.round(clamp(snapshot.level * 500, 0, 100))
   const clarityPercent = Math.round(snapshot.clarity * 100)
-  const targetString = snapshot.stringMatch?.note ?? tuning.strings[0].note
-  const targetFrequency =
-    snapshot.stringMatch?.targetFrequency ?? midiToFrequency(tuning.strings[0].midi, concertA)
+  const targetString = targetMatch?.note ?? null
+  const targetFrequency = targetMatch?.targetFrequency ?? null
   const namedDevices = devices.filter((device) => !device.isAlias)
   const aliasOnly = devices.length > 0 && namedDevices.length === 0
-  const perfectlyTuned = signalPresent && Math.abs(tuningCents) <= 2 && snapshot.clarity >= 0.95
+  const perfectlyTuned =
+    targetLocked && Math.abs(tuningCents) <= 3 && snapshot.clarity >= 0.94
 
   const filteredSongs = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -189,36 +230,7 @@ function App() {
   }, [managedCategoryIds, songCategories, userCategories])
 
   const getNextQueueSong = useCallback((direction: -1 | 1, manual = true) => {
-    if (queueSongs.length === 0) {
-      return null
-    }
-
-    if (!manual && playbackMode === 'stop-after-current') {
-      return null
-    }
-
-    if (playbackMode === 'shuffle') {
-      if (queueSongs.length === 1) {
-        return queueSongs[0]
-      }
-
-      const otherSongs = activeSong
-        ? queueSongs.filter((song) => song.id !== activeSong.id)
-        : queueSongs
-      return otherSongs[Math.floor(Math.random() * otherSongs.length)] ?? null
-    }
-
-    const currentIndex = activeSong ? queueSongs.findIndex((song) => song.id === activeSong.id) : -1
-    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : queueSongs.length
-    const nextIndex = baseIndex + direction
-
-    if (nextIndex < 0 || nextIndex >= queueSongs.length) {
-      return playbackMode === 'repeat-list'
-        ? queueSongs[(nextIndex + queueSongs.length) % queueSongs.length]
-        : null
-    }
-
-    return queueSongs[nextIndex]
+    return getNextQueueItem(queueSongs, activeSong?.id ?? null, playbackMode, direction, manual)
   }, [activeSong, playbackMode, queueSongs])
 
   useEffect(() => {
@@ -232,42 +244,13 @@ function App() {
   }, [isPlaying])
 
   const getNextQueueSongFromRefs = useCallback((direction: -1 | 1, manual = true) => {
-    const currentQueueSongs = queueSongsRef.current
-    const currentActiveSong = activeSongRef.current
-    const currentPlaybackMode = playbackModeRef.current
-
-    if (currentQueueSongs.length === 0) {
-      return null
-    }
-
-    if (!manual && currentPlaybackMode === 'stop-after-current') {
-      return null
-    }
-
-    if (currentPlaybackMode === 'shuffle') {
-      if (currentQueueSongs.length === 1) {
-        return currentQueueSongs[0]
-      }
-
-      const otherSongs = currentActiveSong
-        ? currentQueueSongs.filter((song) => song.id !== currentActiveSong.id)
-        : currentQueueSongs
-      return otherSongs[Math.floor(Math.random() * otherSongs.length)] ?? null
-    }
-
-    const currentIndex = currentActiveSong
-      ? currentQueueSongs.findIndex((song) => song.id === currentActiveSong.id)
-      : -1
-    const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : currentQueueSongs.length
-    const nextIndex = baseIndex + direction
-
-    if (nextIndex < 0 || nextIndex >= currentQueueSongs.length) {
-      return currentPlaybackMode === 'repeat-list'
-        ? currentQueueSongs[(nextIndex + currentQueueSongs.length) % currentQueueSongs.length]
-        : null
-    }
-
-    return currentQueueSongs[nextIndex]
+    return getNextQueueItem(
+      queueSongsRef.current,
+      activeSongRef.current?.id ?? null,
+      playbackModeRef.current,
+      direction,
+      manual,
+    )
   }, [])
 
   const backingReadyCount = useMemo(
@@ -288,6 +271,16 @@ function App() {
       return 'Input is weak. Raise Scarlett Solo gain until the ring flashes green gently.'
     }
 
+    if (!targetLocked && targetString && targetFrequency !== null) {
+      const direction = Math.abs(tuningCents) <= 3
+        ? 'Hold the note steady while the target locks.'
+        : tuningCents > 0
+          ? 'Loosen the tuner slightly.'
+          : 'Tighten the tuner slowly.'
+
+      return `${snapshot.detectedFrequency?.toFixed(1)} Hz detected. Nearest target is ${targetString} at ${targetFrequency.toFixed(1)} Hz. ${direction}`
+    }
+
     if (snapshot.clarity < 0.94) {
       return 'The note is rich in overtones. Try plucking closer to the middle and a little softer.'
     }
@@ -297,7 +290,18 @@ function App() {
     }
 
     return tuningCents > 0 ? 'Pitch is sharp. Loosen the tuner slightly.' : 'Pitch is flat. Tighten the tuner slowly.'
-  }, [perfectlyTuned, signalPresent, snapshot.clarity, snapshot.level, status, targetString, tuningCents])
+  }, [
+    perfectlyTuned,
+    signalPresent,
+    snapshot.clarity,
+    snapshot.detectedFrequency,
+    snapshot.level,
+    status,
+    targetFrequency,
+    targetLocked,
+    targetString,
+    tuningCents,
+  ])
 
   const sectionTitle = useMemo(() => {
     switch (activeSection) {
@@ -393,6 +397,14 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('bass-record.songCategories', JSON.stringify(songCategories))
   }, [songCategories])
+
+  useEffect(() => {
+    window.localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(queueSongIds))
+  }, [queueSongIds])
+
+  useEffect(() => {
+    window.localStorage.setItem('bass-record.playbackMode', playbackMode)
+  }, [playbackMode])
 
   useEffect(() => {
     window.localStorage.setItem('bass-record.playbackRate', String(playbackRate))
@@ -515,6 +527,9 @@ function App() {
       }
 
       autoPlayNextTrackRef.current = true
+      setLoopStart(null)
+      setLoopEnd(null)
+      setAbLoopEnabled(false)
       setSelectedSongId(nextSong.id)
     }
 
@@ -567,32 +582,19 @@ function App() {
   }, [activeSong?.id, activeTrack])
 
   useEffect(() => {
-    if (!referenceEnabled) {
-      const nodes = referenceNodesRef.current
-      const audioContext = referenceContextRef.current
+    stopReferenceTone()
 
-      nodes?.output.gain.cancelScheduledValues(audioContext?.currentTime ?? 0)
-      nodes?.output.gain.setTargetAtTime(0, audioContext?.currentTime ?? 0, 0.05)
-
-      window.setTimeout(() => {
-        stopOscillator(nodes?.primary)
-        stopOscillator(nodes?.octave)
-        if (referenceNodesRef.current === nodes) {
-          referenceNodesRef.current = null
-        }
-      }, 160)
-
+    if (!referenceEnabled || activeSection !== 'input') {
       return
     }
 
-    const audioContext =
-      referenceContextRef.current ?? new AudioContext({ latencyHint: 'interactive' })
-    referenceContextRef.current = audioContext
-
+    const audioContext = new AudioContext({ latencyHint: 'interactive' })
     const output = audioContext.createGain()
     const tremolo = audioContext.createGain()
     const primary = audioContext.createOscillator()
     const octave = audioContext.createOscillator()
+
+    referenceContextRef.current = audioContext
 
     const frequency = midiToFrequency(
       tuning.strings.find((item) => item.note === activeReferenceNote)?.midi ?? tuning.strings[0].midi,
@@ -614,19 +616,13 @@ function App() {
 
     primary.start()
     octave.start()
+    void audioContext.resume().catch(() => undefined)
 
     output.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + 0.08)
     referenceNodesRef.current = { primary, octave, output, tremolo }
 
-    return () => {
-      output.gain.cancelScheduledValues(audioContext.currentTime)
-      output.gain.setTargetAtTime(0, audioContext.currentTime, 0.05)
-      window.setTimeout(() => {
-        stopOscillator(primary)
-        stopOscillator(octave)
-      }, 180)
-    }
-  }, [activeReferenceNote, concertA, referenceEnabled, tuning])
+    return stopReferenceTone
+  }, [activeReferenceNote, activeSection, concertA, referenceEnabled, stopReferenceTone, tuning])
 
   useEffect(() => {
     if (!metronomeEnabled) {
@@ -634,6 +630,8 @@ function App() {
         window.clearInterval(metronomeTimerRef.current)
         metronomeTimerRef.current = null
       }
+      metronomeContextRef.current?.close().catch(() => undefined)
+      metronomeContextRef.current = null
 
       return
     }
@@ -669,12 +667,11 @@ function App() {
 
   useEffect(() => {
     return () => {
-      stopOscillator(referenceNodesRef.current?.primary)
-      stopOscillator(referenceNodesRef.current?.octave)
-      referenceContextRef.current?.close().catch(() => undefined)
+      stopReferenceTone()
       metronomeContextRef.current?.close().catch(() => undefined)
+      metronomeContextRef.current = null
     }
-  }, [])
+  }, [stopReferenceTone])
 
   const togglePlayback = async () => {
     const audio = audioRef.current
@@ -723,6 +720,9 @@ function App() {
 
     pendingTrackAutoplayRef.current = true
     autoPlayNextTrackRef.current = true
+    setLoopStart(null)
+    setLoopEnd(null)
+    setAbLoopEnabled(false)
     setSelectedSongId(songId)
   }
 
@@ -744,6 +744,10 @@ function App() {
 
   const removeQueueSong = (songId: string) => {
     setQueueSongIds((current) => current.filter((id) => id !== songId))
+  }
+
+  const reorderQueue = (fromIndex: number, toIndex: number) => {
+    setQueueSongIds((current) => moveItem(current, fromIndex, toIndex))
   }
 
   const handleVariantSelect = (variant: TrackVariant) => {
@@ -798,6 +802,75 @@ function App() {
       setLoopStart(null)
     }
   }
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) {
+        return false
+      }
+
+      return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || isEditableTarget(event.target)) {
+        return
+      }
+
+      const audio = audioRef.current
+      const key = event.key.toLowerCase()
+
+      if (event.code === 'Space') {
+        if (event.target instanceof HTMLButtonElement) {
+          return
+        }
+
+        if (!audio || !activeTrack) {
+          return
+        }
+
+        event.preventDefault()
+        if (audio.paused) {
+          void audio.play().catch(() => setIsPlaying(false))
+        } else {
+          audio.pause()
+        }
+        return
+      }
+
+      if (!audio || !activeTrack) {
+        return
+      }
+
+      if (key === 'a') {
+        event.preventDefault()
+        const nextTime = audio.currentTime
+        setLoopStart(nextTime)
+        if (loopEnd !== null && loopEnd <= nextTime) {
+          setLoopEnd(null)
+        }
+        return
+      }
+
+      if (key === 'b') {
+        event.preventDefault()
+        const nextTime = audio.currentTime
+        setLoopEnd(nextTime)
+        if (loopStart !== null && nextTime <= loopStart) {
+          setLoopStart(null)
+        }
+        return
+      }
+
+      if (key === 'l' && loopStart !== null && loopEnd !== null && loopEnd > loopStart) {
+        event.preventDefault()
+        setAbLoopEnabled((current) => !current)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeTrack, loopEnd, loopStart])
 
   const addMarker = () => {
     if (!activeSong) {
@@ -861,15 +934,45 @@ function App() {
     setEditingCategoryId(id)
   }
 
+  const renameCategory = (categoryId: string, name: string) => {
+    const trimmedName = name.trim()
+
+    if (!trimmedName || lessonOptions.some((lesson) => lesson.id === categoryId)) {
+      return
+    }
+
+    const duplicate = userCategories.some(
+      (category) => category.id !== categoryId && category.name.toLowerCase() === trimmedName.toLowerCase(),
+    )
+
+    if (duplicate) {
+      return
+    }
+
+    setUserCategories((current) => current.map((category) =>
+      category.id === categoryId ? { ...category, name: trimmedName } : category,
+    ))
+  }
+
+  const restoreHiddenCategories = () => {
+    setHiddenCategoryIds([])
+  }
+
   const deleteCategory = (categoryId: string) => {
     const isBuiltInCategory = lessonOptions.some((lesson) => lesson.id === categoryId)
 
     if (isBuiltInCategory) {
       setHiddenCategoryIds((current) => current.includes(categoryId) ? current : [...current, categoryId])
-    } else {
-      setUserCategories((current) => current.filter((category) => category.id !== categoryId))
+      if (selectedLibraryFilterId === categoryId) {
+        setSelectedLibraryFilterId('all')
+      }
+      if (editingCategoryId === categoryId) {
+        setEditingCategoryId(null)
+      }
+      return
     }
 
+    setUserCategories((current) => current.filter((category) => category.id !== categoryId))
     setManagedCategoryIds((current) => current.filter((id) => id !== categoryId))
     setSongCategories((current) => {
       const nextMap: SongCategoryMap = {}
@@ -938,7 +1041,17 @@ function App() {
 
       <Sidebar
         activeSection={activeSection}
-        onSectionChange={setActiveSection}
+        onSectionChange={(section) => {
+          if (section !== 'input') {
+            setReferenceEnabled(false)
+          }
+
+          if (section !== 'practice') {
+            setMetronomeEnabled(false)
+          }
+
+          setActiveSection(section)
+        }}
         quickStats={quickStats}
       />
 
@@ -982,6 +1095,7 @@ function App() {
                 snapshot={snapshot}
                 tuning={tuning}
                 concertA={concertA}
+                targetLocked={targetLocked}
                 signalPresent={signalPresent}
                 targetString={targetString}
                 targetFrequency={targetFrequency}
@@ -991,10 +1105,6 @@ function App() {
                 inTune={inTune}
                 signalLevel={signalLevel}
                 clarityPercent={clarityPercent}
-                onReferenceString={(note) => {
-                  setReferenceStringNote(note)
-                  setReferenceEnabled(true)
-                }}
               />
             )}
 
@@ -1047,7 +1157,9 @@ function App() {
                   onPlayCategory={playCategory}
                   onToggleFavorite={toggleFavorite}
                   onCreateCategory={createCategory}
+                  onRenameCategory={renameCategory}
                   onDeleteCategory={deleteCategory}
+                  onRestoreHiddenCategories={restoreHiddenCategories}
                   onOpenCategoryEditor={setEditingCategoryId}
                   onCloseCategoryEditor={() => setEditingCategoryId(null)}
                   onSaveCategorySongs={saveCategorySongs}
@@ -1085,11 +1197,9 @@ function App() {
         onVariantSelect={handleVariantSelect}
         onPlaybackRateChange={setPlaybackRate}
         onPlaybackModeChange={setPlaybackMode}
-        onQueueSongSelect={(songId) => {
-          autoPlayNextTrackRef.current = true
-          setSelectedSongId(songId)
-        }}
+        onQueueSongSelect={requestSongPlayback}
         onRemoveQueueSong={removeQueueSong}
+        onReorderQueue={reorderQueue}
         onClearQueue={() => {
           setQueueSongIds([])
           setQueueOpen(false)

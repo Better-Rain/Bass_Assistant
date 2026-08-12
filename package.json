@@ -8,8 +8,10 @@
     "dev": "vite",
     "dev:desktop": "concurrently -k \"npm run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "tsc -b && vite build",
-    "build:desktop": "npm run build && electron --version",
+    "build:desktop": "npm run build && electron electron/main.cjs --smoke-test",
     "lint": "eslint .",
+    "test": "npm run test:logic",
+    "test:logic": "node --experimental-strip-types --test scripts/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

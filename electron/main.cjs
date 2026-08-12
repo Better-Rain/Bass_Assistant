@@ -1,9 +1,12 @@
 ﻿const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
+const { fileURLToPath } = require('node:url')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
+const isSmokeTest = process.argv.includes('--smoke-test')
 
-const createWindow = async () => {
+const createWindow = async ({ show = true } = {}) => {
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 940,
@@ -14,6 +17,7 @@ const createWindow = async () => {
     autoHideMenuBar: true,
     frame: false,
     titleBarStyle: 'hidden',
+    show,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -29,10 +33,44 @@ const createWindow = async () => {
 
   if (isDev) {
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    return
+    return mainWindow
   }
 
   await mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+  return mainWindow
+}
+
+const runSmokeTest = async () => {
+  const smokeWindow = await createWindow({ show: false })
+
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  const result = await smokeWindow.webContents.executeJavaScript(`(() => {
+    const root = document.querySelector('#root')
+    const audio = document.querySelector('audio')
+    return {
+      title: document.title,
+      rootRendered: Boolean(root && root.children.length > 0),
+      audioPresent: Boolean(audio),
+      audioSrc: audio?.src ?? '',
+    }
+  })()`)
+
+  const passed =
+    result.title === 'Redline Bass Tuner' &&
+    result.rootRendered &&
+    result.audioPresent &&
+    result.audioSrc.startsWith('file://') &&
+    fs.existsSync(fileURLToPath(result.audioSrc))
+
+  if (!passed) {
+    console.error('Electron smoke test failed:', result)
+    process.exitCode = 1
+  } else {
+    console.log('Electron smoke test passed:', result)
+  }
+
+  smokeWindow.destroy()
+  app.quit()
 }
 
 const getFocusedWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
@@ -62,7 +100,15 @@ ipcMain.on('window:close', () => {
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.redline.bass-tuner')
-  void createWindow()
+  if (isSmokeTest) {
+    void runSmokeTest().catch((error) => {
+      console.error('Electron smoke test error:', error)
+      process.exitCode = 1
+      app.quit()
+    })
+  } else {
+    void createWindow()
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

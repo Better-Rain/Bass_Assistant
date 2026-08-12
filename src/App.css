@@ -764,8 +764,8 @@
 
 .tolerance-zone {
   position: absolute;
-  left: 45%;
-  width: 10%;
+  left: 46.5%;
+  width: 7%;
   bottom: 27px;
   height: 4px;
   border-radius: 999px;
@@ -788,7 +788,13 @@
   border-right: 11px solid transparent;
   border-top: 26px solid #f7f0f0;
   filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.16));
-  transition: left 120ms ease-out;
+  transition:
+    left 180ms ease-out,
+    opacity 120ms ease-out;
+}
+
+.needle-hidden {
+  opacity: 0;
 }
 
 .needle::after {
@@ -827,6 +833,10 @@
   color: var(--text-soft);
 }
 
+.centered {
+  color: var(--success);
+}
+
 .string-grid,
 .preset-grid,
 .reference-grid,
@@ -841,7 +851,6 @@
   gap: 10px;
 }
 
-.string-card,
 .preset-card,
 .reference-pill,
 .icon-button {
@@ -854,7 +863,6 @@
     box-shadow 160ms ease;
 }
 
-.string-card:hover,
 .preset-card:hover,
 .reference-pill:hover,
 .icon-button:hover {
@@ -863,6 +871,11 @@
 }
 
 .string-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
   padding: 12px 14px;
   border-radius: 16px;
   text-align: left;
@@ -893,6 +906,11 @@
 .string-card-active {
   background: linear-gradient(180deg, rgba(255, 77, 77, 0.18), rgba(255, 255, 255, 0.04));
   box-shadow: 0 10px 30px rgba(255, 48, 48, 0.14);
+}
+
+.string-card-candidate {
+  border-color: rgba(255, 174, 92, 0.42);
+  background: linear-gradient(180deg, rgba(255, 139, 71, 0.1), rgba(255, 255, 255, 0.025));
 }
 
 .string-card-tuned {
@@ -1161,6 +1179,28 @@
   border: 0;
   color: var(--text-strong);
   outline: none;
+}
+
+.inline-category-rename {
+  min-width: 230px;
+  gap: 4px;
+  padding-left: 10px;
+}
+
+.inline-category-rename input {
+  width: 145px;
+}
+
+.inline-category-rename button {
+  width: 26px;
+  height: 26px;
+}
+
+.restore-category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-soft);
 }
 
 .add-category-chip {
@@ -1522,7 +1562,7 @@
 
 .queue-popover-header,
 .queue-track,
-.queue-track button:first-child {
+.queue-track-main {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1561,11 +1601,56 @@
 
 .queue-track {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   padding: 8px;
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.queue-track-dragging {
+  opacity: 0.52;
+  border-color: rgba(255, 117, 117, 0.5);
+  box-shadow: 0 0 0 2px rgba(255, 117, 117, 0.12);
+}
+
+.queue-drag-handle {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.queue-track:active .queue-drag-handle {
+  cursor: grabbing;
+}
+
+.queue-reorder-buttons {
+  display: grid;
+  gap: 3px;
+}
+
+.queue-reorder-buttons button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.queue-reorder-buttons button:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: rgba(255, 117, 117, 0.36);
+}
+
+.queue-reorder-buttons button:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .queue-track-active {
@@ -1573,7 +1658,7 @@
   border-color: rgba(255, 117, 117, 0.32);
 }
 
-.queue-track button:first-child {
+.queue-track-main {
   min-width: 0;
   padding: 0;
   background: transparent;
@@ -1583,21 +1668,21 @@
   cursor: pointer;
 }
 
-.queue-track button:first-child span {
+.queue-track-main span {
   flex: 0 0 auto;
   color: #ff8585;
   font-family: var(--font-display);
   font-size: 0.76rem;
 }
 
-.queue-track button:first-child strong {
+.queue-track-main strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.queue-track button:first-child small {
+.queue-track-main small {
   flex: 0 0 auto;
   color: var(--text-muted);
 }
